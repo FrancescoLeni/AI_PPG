@@ -63,7 +63,6 @@ class Preprocess:
                 win = round(s.fs * self.sm_wins['ppg']/1000)
                 B = 1 / win * np.ones(win)
                 ppg = filtfilt(B, 1, ppg_cb2, padtype=None)
-                print(ppg.shape)
             else:
                 ppg=ppg_cb2
         else:
@@ -91,13 +90,6 @@ class Preprocess:
             vpg = np.gradient(ppg)
             apg = np.gradient(vpg)
             jpg = np.gradient(apg)
-
-        w, h = scipy.signal.freqz(b, a, worN=8000)
-        plt.plot(0.5 * s.fs * w / np.pi, np.abs(h), 'b')
-        plt.title('Chebyshev Type II frequency response (Low-pass)')
-        plt.xlabel('Frequency [Hz]')
-        plt.ylabel('Gain')
-        plt.show()
 
         return ppg, vpg, apg, jpg
 
