@@ -1,0 +1,9 @@
+
+
+numpy
+matplotlib
+dotmap
+scipy
+pandas
+sklearn
+
