@@ -29,7 +29,7 @@ class FpCollection:
     ###########################################################################
     ############################ Get Fiducial Points ##########################
     ###########################################################################
-    def get_fiducials(self, s:PPG):
+    def get_fiducials(self, s:PPG, ext_peaks=None):
         '''This function calculates the PPG Fiducial Points.
             - Original signal: List of systolic peak, pulse onset, dicrotic notch, and diastolic peak
             - 1st derivative: List of points of 1st maximum and minimum in 1st derivitive between the onset to onset intervals (u,v)
@@ -46,7 +46,7 @@ class FpCollection:
 
         # Extract Fiducial Points
         ppg_fp=pd.DataFrame()
-        peaks, onsets = self.get_peak_onset(peak_detector)
+        peaks, onsets = self.get_peak_onset(peak_detector, ext_peaks)
         dicroticnotch = self.get_dicrotic_notch(peaks, onsets)
 
         vpg_fp = self.get_vpg_fiducials(onsets)
@@ -94,7 +94,7 @@ class FpCollection:
     ###########################################################################
     ############################ PPG beat detector ############################
     ###########################################################################
-    def get_peak_onset(self, peak_detector='PPGdet'):
+    def get_peak_onset(self, peak_detector='PPGdet', ext_peaks=None):
         '''PPGdet detects beats in a photoplethysmogram (PPG) signal
         using the improved 'Automatic Beat Detection' of Aboy M et al.
 
@@ -208,27 +208,31 @@ class FpCollection:
 
         peaks, fn = self.correct_IBI(all_p4, px, np.median(all_hr), fs, up)
 
-        peaks = (all_p4/fs*fso).astype(int)
-        onsets, peaks = self.find_onsets(self.ppg, fso, up, peaks,60/np.median(all_hr)*fs)
+        peaks = (all_p4/fs*fso).astype(int) #qui
 
-        # Correct Peaks
-        for i in range(0, len(peaks) - 1):
-            max_loc = np.argmax(self.ppg[onsets[i]:onsets[i + 1]]) + onsets[i]
-            if peaks[i] != max_loc:
-                peaks[i] = max_loc
+        if ext_peaks is not None:
+            onsets, peaks = self.find_onsets(self.ppg, fso, up, ext_peaks,60/np.median(all_hr)*fs)
 
-        # Correct onsets
-        onsets, peaks = self.find_onsets(self.ppg, fso, up, peaks, 60 / np.median(all_hr) * fs)
+        else:
+            onsets, peaks = self.find_onsets(self.ppg, fso, up, peaks, 60 / np.median(all_hr) * fs)
+            # Correct Peaks
+            for i in range(0, len(peaks) - 1):
+                max_loc = np.argmax(self.ppg[onsets[i]:onsets[i + 1]]) + onsets[i]
+                if peaks[i] != max_loc:
+                    peaks[i] = max_loc
 
-        temp_i = np.where(np.diff(onsets) == 0)[0]
-        if len(temp_i) > 0:
-            peaks = np.delete(peaks, temp_i)
-            onsets = np.delete(onsets, temp_i)
+            # Correct onsets
+            onsets, peaks = self.find_onsets(self.ppg, fso, up, peaks, 60 / np.median(all_hr) * fs)
 
-        temp_i = np.where((peaks - onsets) < fso / 30)[0]
-        if len(temp_i) > 0:
-            peaks = np.delete(peaks, temp_i)
-            onsets = np.delete(onsets, temp_i)
+            temp_i = np.where(np.diff(onsets) == 0)[0]
+            if len(temp_i) > 0:
+                peaks = np.delete(peaks, temp_i)
+                onsets = np.delete(onsets, temp_i)
+
+            temp_i = np.where((peaks - onsets) < fso / 30)[0]
+            if len(temp_i) > 0:
+                peaks = np.delete(peaks, temp_i)
+                onsets = np.delete(onsets, temp_i)
 
         return peaks, onsets
 
@@ -766,8 +770,8 @@ class FpCollection:
 
         i=1
         while i < len(peaks):
-            min_SUT=fs*0.12     # minimum Systolic Upslope Time 120 ms
-            min_DT=fs*0.3       # minimum Diastolic Time 300 ms
+            min_SUT=fs*0.12    # minimum Systolic Upslope Time 120 ms
+            min_DT=fs*0.1       # minimum Diastolic Time 300 ms
 
             before_peak=temp_oi0 <peaks[i]
             after_last_onset=temp_oi0 > onsets[i - 1]

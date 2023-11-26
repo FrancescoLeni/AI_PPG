@@ -66,9 +66,12 @@ class OneSignal:
         # get on_set points
         s = PPG(s)
         fpex = FpCollection(s=s)
-        fiducials = fpex.get_fiducials(s=s)
+        fiducials = fpex.get_fiducials(s=s, ext_peaks= self.peaks)
 
         self.on = list(fiducials['on'][:]) # here i'm wasting a lot more points (and time for calculating them...)
+
+        self.add_onsets()
+
         self.normalize(data_min, data_max)
 
     def normalize(self, data_min, data_max):
@@ -79,4 +82,28 @@ class OneSignal:
         scaler.data_max_ = data_max
 
         self.ppg = scaler.fit_transform(new)
+
+    def add_onsets(self):
+        k = 0
+        o = []
+        for i in range(len(self.on) - 1):
+            o.append(self.on[i])
+            o2 = self.on[i + 1]
+            p = self.peaks[k]
+            p2 = self.peaks[k + 1]
+            p3 = self.peaks[k + 2]
+            k += 1
+            if p2 < o2:
+                o.append(int((p + p2) // 2))
+                k += 1
+                if p3 < o2:
+                    o.append(int((p3 + p2) // 2))
+                    k += 1
+            if i == (len(self.on) - 2):
+                o.append(o2)
+        if o[-1] < self.peaks[-1]:
+            o.append(int((self.peaks[-2]+self.peaks[-1]) // 2))
+
+        self.on = np.array(o, dtype=int)
+
 
