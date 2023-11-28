@@ -42,6 +42,7 @@ class OneSignal:
         self.labels = scipy.io.loadmat(self.label_path)['labels']
 
         self.indx = 0 # peak to crop
+        self.indx_max = int(self.peaks.shape[0])
 
     def filter(self, fL=0.8, fH=3.3, order=4, sm = {'ppg':50,'vpg':10,'apg':10,'jpg':10}, data_min= -90, data_max= 90):
 
