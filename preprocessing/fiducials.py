@@ -212,6 +212,7 @@ class FpCollection:
 
         if ext_peaks is not None:
             onsets, peaks = self.find_onsets(self.ppg, fso, up, ext_peaks,60/np.median(all_hr)*fs)
+            # peaks = ext_peaks.squeeze()
 
         else:
             onsets, peaks = self.find_onsets(self.ppg, fso, up, peaks, 60 / np.median(all_hr) * fs)
@@ -831,8 +832,11 @@ class FpCollection:
 
         dic_not=[]
         for i in range(0,len(onsets)-1):
-            nth_beat = lp_ppg[onsets[i]:onsets[i + 1]]
 
+            if isinstance(onsets[i], np.ndarray):
+                onsets[i]=onsets[i][0]
+
+            nth_beat = lp_ppg[onsets[i]:onsets[i + 1]]
             i_Pmax=peaks[i]-onsets[i]
             t_Pmax=(peaks[i]-onsets[i])/fs
             t=np.linspace(0,len(nth_beat)-1,len(nth_beat))/fs

@@ -41,19 +41,5 @@ def raw_vs_filtered(raw, filtered, onsets, peaks, labels, dt = 0):
         axes[1].text(x, y+0.01*abs(y), label, fontsize=8, color='black')
     axes[1].set_title('Filtered')
 
-
-
-
-    # ax = axes[0]
-    # ax.plot(range(onsets[dt+0],onsets[dt+40]),raw[onsets[dt+0]:onsets[dt+40]])
-    # axes[0].scatter(onsets[dt+0:dt+41], raw[onsets[dt+0:dt+41]], color='red', marker='o')
-    # axes[0].scatter(peaks[dt + 0:dt + 40], raw[peaks[dt + 0:dt + 40]], color='blue', marker='*')
-    # ax.set_title('RAW')
-    #
-    # axes[1].plot(range(onsets[dt+0],onsets[dt+40]), filtered[onsets[dt+0]:onsets[dt+40]])
-    # axes[1].scatter(onsets[dt+0:dt+41], filtered[onsets[dt+0:dt+41]], color='red', marker='o')
-    # axes[1].scatter(peaks[dt + 0:dt + 40], filtered[peaks[dt + 0:dt + 40]], color='blue', marker='*')
-    # axes[1].set_title('Filtered')
-    #
     plt.tight_layout()
     plt.show()

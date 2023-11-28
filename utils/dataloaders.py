@@ -41,6 +41,8 @@ class OneSignal:
         self.peaks = scipy.io.loadmat(self.peaks_path)['speaks']
         self.labels = scipy.io.loadmat(self.label_path)['labels']
 
+        self.indx = 0 # peak to crop
+
     def filter(self, fL=0.8, fH=3.3, order=4, sm = {'ppg':50,'vpg':10,'apg':10,'jpg':10}, data_min= -90, data_max= 90):
 
         # stupid class that the functions need...
@@ -103,7 +105,14 @@ class OneSignal:
                 o.append(o2)
         if o[-1] < self.peaks[-1]:
             o.append(int((self.peaks[-2]+self.peaks[-1]) // 2))
+        o.append(int(len(self.ppg)-1))
 
         self.on = np.array(o, dtype=int)
 
 
+    def crop(self):
+
+        crop = self.ppg[self.on[self.indx]:self.on[self.indx+1]]
+        lab = self.labels[self.indx]
+        self.indx+=1
+        return (crop,lab)
