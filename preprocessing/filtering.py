@@ -47,7 +47,6 @@ class Preprocess:
 
         ## PPG filtering
         if s.filtering:
-            print('filtering...')
             fL = self.fL
             fH = self.fH
             order = self.order

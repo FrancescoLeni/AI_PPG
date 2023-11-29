@@ -46,6 +46,7 @@ class OneSignal:
 
     def filter(self, fL=0.8, fH=3.3, order=4, sm = {'ppg':50,'vpg':10,'apg':10,'jpg':10}, data_min= -90, data_max= 90):
 
+        print(f'filtering signal {self.name}...')
         # stupid class that the functions need...
         s = DotMap()
         s.end_sig = -1
@@ -77,6 +78,16 @@ class OneSignal:
 
         self.normalize(data_min, data_max)
 
+    def get_crops(self):
+
+        crops = []
+        labs = []
+        while (self.indx < self.indx_max):
+            x, y = self.crop()
+            crops.append(x)
+            labs.append(y)
+        return (crops,labs)
+
     def normalize(self, data_min, data_max):
         new = self.ppg.reshape(-1, 1)
         scaler = MinMaxScaler()
@@ -104,8 +115,12 @@ class OneSignal:
                     k += 1
             if i == (len(self.on) - 2):
                 o.append(o2)
+        if o[-1] < self.peaks[-3]:
+            o.append(int((self.peaks[-4] + self.peaks[-3]) // 2))
+        if o[-1] < self.peaks[-2]:
+            o.append(int((self.peaks[-3]+self.peaks[-2]) // 2))
         if o[-1] < self.peaks[-1]:
-            o.append(int((self.peaks[-2]+self.peaks[-1]) // 2))
+            o.append(int((self.peaks[-2] + self.peaks[-1]) // 2))
         o.append(int(len(self.ppg)-1))
 
         self.on = np.array(o, dtype=int)
@@ -117,3 +132,4 @@ class OneSignal:
         lab = self.labels[self.indx]
         self.indx+=1
         return (crop,lab)
+

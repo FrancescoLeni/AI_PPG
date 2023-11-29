@@ -1,6 +1,7 @@
 import os
 import shutil
 from pathlib import Path
+import h5py
 
 from utils.dataloaders import OneSignal
 from utils import random_state
@@ -17,7 +18,7 @@ random_state(36)
 
 
 dad = 'dataset'
-l = ["data", "peaks", "label" ]
+l = ["data", "peaks", "label", "blacklisted_data" ]
 for i in l:
     if not os.path.isdir(os.path.join(dad, i)):
         os.mkdir(os.path.join(dad, i))
@@ -27,13 +28,16 @@ for files in os.listdir(dad):
     if os.path.isfile(path):
         if "_spk" in files:
             dst = os.path.join(dad,l[1],files[0:8]+'.mat')
-            shutil.move(path,dst)
+            shutil.move(path, dst)
         elif "_ann" in files:
             dst = os.path.join(dad,l[2],files[0:8]+'.mat')
             shutil.move(path,dst)
         else:
             dst = os.path.join(dad,l[0],files[0:8]+'.mat')
-            shutil.move(path,dst)
+            if files[0:8] != "S120_250":  # blacklisted
+                shutil.move(path, dst)
+            else:
+                shutil.move(path, os.path.join(dad, l[3], files[0:8] + '.mat'))
 
 # ----------------------------------------------------------------------------------------------------------------------
 # to retrive samples with reasonable number of positives
@@ -62,3 +66,62 @@ for name in os.listdir(parent / 'data'):
     else:
         shutil.copy((parent / 'data' / name), (parent / 'only_N' / name))
 
+# ----------------------------------------------------------------------------------------------------------------------
+# to save files of cropped peaks divided into classes
+# ----------------------------------------------------------------------------------------------------------------------
+
+parent = Path('dataset')
+
+if not os.path.isdir(parent / 'crops'):
+    os.mkdir(parent / 'crops')
+
+data_path = parent / 'data'
+
+crops_n = []
+labs_n = []
+crops_v = []
+labs_v = []
+crops_s = []
+labs_s = []
+
+for sample in os.listdir(data_path):
+
+    signal = OneSignal(sample)
+    signal.filter(fL = 0.5, fH = 4.3, order = 4)
+
+    while(signal.indx < signal.indx_max):
+
+        x, y = signal.crop()
+
+        if y == 'N':
+            crops_n.append(x)
+            labs_n.append(y)
+        if y == 'S':
+            crops_s.append(x)
+            labs_s.append(y)
+        if y == 'V':
+            crops_v.append(x)
+            labs_v.append(y)
+
+    print(f"len N = {len(crops_n)}, len V = {len(crops_v)}, len S = {len(crops_s)}")
+
+with h5py.File('crops/N_crops.h5', 'w') as file:
+    # Save crops as separate datasets
+    for i, crop in enumerate(crops_n):
+        file.create_dataset(f'crop_{i}', data=crop)
+    # Save labels as a dataset
+    file.create_dataset('labels', data=np.array(labs_n, dtype='S'))
+
+with h5py.File('crops/S_crops.h5', 'w') as file:
+    # Save crops as separate datasets
+    for i, crop in enumerate(crops_s):
+        file.create_dataset(f'crop_{i}', data=crop)
+    # Save labels as a dataset
+    file.create_dataset('labels', data=np.array(labs_s, dtype='S'))
+
+with h5py.File('crops/V_crops.h5', 'w') as file:
+    # Save crops as separate datasets
+    for i, crop in enumerate(crops_v):
+        file.create_dataset(f'crop_{i}', data=crop)
+    # Save labels as a dataset
+    file.create_dataset('labels', data=np.array(labs_v, dtype='S'))
