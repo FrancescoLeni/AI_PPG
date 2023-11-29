@@ -125,3 +125,17 @@ with h5py.File('crops/V_crops.h5', 'w') as file:
         file.create_dataset(f'crop_{i}', data=crop)
     # Save labels as a dataset
     file.create_dataset('labels', data=np.array(labs_v, dtype='S'))
+
+# ----------------------------------------------------------------------------------------------------------------------
+# to load .h5
+# ----------------------------------------------------------------------------------------------------------------------
+
+# with h5py.File('dataset/crops/S_crops.h5', 'r') as file:
+#     loaded_crops = [file[key][:] for key in file.keys() if key != "labels"]
+#     loaded_labels = file['labels'][:].astype('U')
+#
+# # Access specific elements by index
+# crop_0 = loaded_crops[-1]
+# label_0 = loaded_labels[-1]
+
+
