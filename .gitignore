@@ -1,4 +1,6 @@
+# Ignore all generated cache
+*__pycache__*
 
-
+# Folders to ignore
 /runs/
 /dataset/
