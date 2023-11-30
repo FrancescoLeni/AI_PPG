@@ -8,4 +8,5 @@ pandas
 scikit-learn
 scikit-image
 h5py
-
+torch
+torchvision
