@@ -137,7 +137,7 @@ with h5py.File(parent / 'crops/V_crops.h5', 'w') as file:
 #     with h5py.File(parent / names, 'r') as file:
 #         name = Path(names).stem
 #         exec(f"{name} = [file[key][:] for key in file.keys() if key != 'labels']")
-#         exec(f"{name[0]}_labels = file['labels'][:].astype('U')")
+#         exec(f"{name[0]}_labels = list(file['labels'][:].astype('U'))")
 #
 # # Access specific elements by index
 # N_x = N_crops[-1]
