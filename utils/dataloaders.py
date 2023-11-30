@@ -18,8 +18,8 @@ import h5py
 class OneSignal:
     def __init__(self, data_name = None):
         """
-        :param data_name: filename like 'S001_128.mat' or tuple (data_path,label_path,peaks_path)
-
+        :param
+            --data_name: filename like 'S001_128.mat' or tuple (data_path,label_path,peaks_path)
         """
         super().__init__()
         parent = 'dataset'
