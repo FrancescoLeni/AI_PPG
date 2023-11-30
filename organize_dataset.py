@@ -131,12 +131,18 @@ with h5py.File(parent / 'crops/V_crops.h5', 'w') as file:
 # to load .h5
 # ----------------------------------------------------------------------------------------------------------------------
 
-# with h5py.File('dataset/crops/S_crops.h5', 'r') as file:
-#     loaded_crops = [file[key][:] for key in file.keys() if key != "labels"]
-#     loaded_labels = file['labels'][:].astype('U')
+# parent = Path('dataset/crops')
+# for names in ["N_crops.h5","V_crops.h5","S_crops.h5"]:
+#
+#     with h5py.File(parent / names, 'r') as file:
+#         name = Path(names).stem
+#         exec(f"{name} = [file[key][:] for key in file.keys() if key != 'labels']")
+#         exec(f"{name[0]}_labels = file['labels'][:].astype('U')")
 #
 # # Access specific elements by index
-# crop_0 = loaded_crops[-1]
-# label_0 = loaded_labels[-1]
-
-
+# N_x = N_crops[-1]
+# N_y = N_labels[-1]
+# V_x = V_crops[-1]
+# V_y = V_labels[-1]
+# S_x = S_crops[-1]
+# S_y = S_labels[-1]
