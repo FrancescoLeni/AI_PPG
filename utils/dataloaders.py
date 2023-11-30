@@ -3,13 +3,18 @@ from preprocessing.filtering import Preprocess
 from preprocessing.fiducials import FpCollection
 from preprocessing import PPG
 
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+from pathlib import Path
 from dotmap import DotMap
 import numpy as np
 import pandas as pd
 import scipy.io
+import random
 import os
-from sklearn.preprocessing import MinMaxScaler
-
+import h5py
+import torch
+import torchvision
 
 class OneSignal:
     def __init__(self, data_name = None):
@@ -133,3 +138,94 @@ class OneSignal:
         self.indx+=1
         return (crop,lab)
 
+
+
+class Crops():
+    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops'), seed=36):
+        super().__init__()
+        names_list = [N,V,S]
+        for names in names_list:
+            with h5py.File(parent / names, 'r') as file:
+                name = Path(names).stem
+                setattr(self, name, [file[key][:] for key in file.keys() if key != 'labels'])
+                setattr(self, f"{name[0]}_labels", list(file['labels'][:].astype('U')))
+
+        self.seed = seed
+
+    def split(self, test_size=.15):
+
+        x = self.V_crops + self.S_crops + self.N_crops
+        y = self.V_labels + self.S_labels + self.N_labels
+
+        x_train_val, x_test, y_train_val, y_test = train_test_split(x, y, random_state=self.seed, test_size=test_size,
+                                                                    shuffle=True, stratify=y)
+        x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, random_state=self.seed, test_size=len(x_test),
+                                                                    shuffle=True, stratify=y_train_val)
+        setattr(self,'train', [(x, y) for x, y in zip(x_train, y_train)])
+        setattr(self,'val', [(x, y) for x, y in zip(x_val, y_val)])
+        setattr(self,'test', [(x, y) for x, y in zip(x_test, y_test)])
+
+
+
+
+
+
+
+class CropsDataset(torch.utils.data.Dataset):
+    def __init__(self, data, mode="binary", transform = None, target_transform = None):
+
+        if mode not in ["binary", "all"]:
+            raise ValueError(f"Mode {mode} not yet supported, chose between ""binary"" and ""all"" ")
+        else:
+            self.mode = mode
+
+        self.V = []
+        self.S = []
+        self.N = []
+        for x, y in data:
+            if y == "V" :
+                self.V.append(x)
+            elif y == "S":
+                self.S.append(x)
+            else:
+                self.N.append(x)
+
+        self.half_len = len(self.V)+len(self.S)
+
+        self.build()
+
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        data, target = self.data[idx]
+        data = torch.from_numpy(data.astype('float32')).permute(1,0)   # Channel-lenght
+        target = torch.LongTensor([target])
+        if self.transform:
+            data = self.transform(data)
+        if self.target_transform:
+            target = self.target_transform(target)
+        return data, target
+
+    def build(self):
+        self.shuffle_N()
+        N_ = self.N[0:self.half_len]
+        N = [(x, y) for x, y in zip(N_, list(np.zeros(self.half_len)))] # N labelled as 0
+
+        if self.mode == "all":
+            P = [(x, y) for x, y in zip(self.V, list(np.ones(len(self.V))))] + \
+                [(x, y) for x, y in zip(self.S, list(np.ones(len(self.S)))*2)] # V labelled as 1, S labelled as 2
+        else: # binary
+            P = [(x, y) for x, y in zip(self.V+self.S, list(np.ones(self.half_len)))] # V and S labelled as 1
+
+        if hasattr(self, 'data'):
+            self.data = N+P
+        else:
+            setattr(self, 'data', N+P)
+        random.shuffle(self.data)
+
+    def shuffle_N(self):
+        random.shuffle(self.N)
