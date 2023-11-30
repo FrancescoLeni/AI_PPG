@@ -2,6 +2,7 @@ import os
 import shutil
 from pathlib import Path
 import h5py
+import numpy as np
 
 from utils.dataloaders import OneSignal
 from utils import random_state
@@ -105,21 +106,21 @@ for sample in os.listdir(data_path):
 
     print(f"len N = {len(crops_n)}, len V = {len(crops_v)}, len S = {len(crops_s)}")
 
-with h5py.File('crops/N_crops.h5', 'w') as file:
+with h5py.File(parent / 'crops/N_crops.h5', 'w') as file:
     # Save crops as separate datasets
     for i, crop in enumerate(crops_n):
         file.create_dataset(f'crop_{i}', data=crop)
     # Save labels as a dataset
     file.create_dataset('labels', data=np.array(labs_n, dtype='S'))
 
-with h5py.File('crops/S_crops.h5', 'w') as file:
+with h5py.File(parent / 'crops/S_crops.h5', 'w') as file:
     # Save crops as separate datasets
     for i, crop in enumerate(crops_s):
         file.create_dataset(f'crop_{i}', data=crop)
     # Save labels as a dataset
     file.create_dataset('labels', data=np.array(labs_s, dtype='S'))
 
-with h5py.File('crops/V_crops.h5', 'w') as file:
+with h5py.File(parent / 'crops/V_crops.h5', 'w') as file:
     # Save crops as separate datasets
     for i, crop in enumerate(crops_v):
         file.create_dataset(f'crop_{i}', data=crop)
