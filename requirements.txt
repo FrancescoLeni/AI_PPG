@@ -1,26 +1,17 @@
 
+torch==2.1.1
+torchvision==0.16.1
 
-numpy
-matplotlib
-dotmap
-scipy
-pandas
-scikit-learn
-scikit-image
-h5py
-torch
-torchvision
+dotmap==1.3.30
+h5py==3.10.0
 
-# dotmap==1.3.30
-# h5py==3.10.0
+numpy==1.26.2
+matplotlib==3.8.2
 
-# numpy==1.26.2
-# matplotlib==3.8.2
-
-# pandas==2.1.3
-# scipy==1.11.4
-# scikit-learn==1.3.2
-# scikit-image==0.22.0
+pandas==2.1.3
+scipy==1.11.4
+scikit-learn==1.3.2
+scikit-image==0.22.0
 
 # pyppg==1.0.44
 # pip install now would install 1.0.14 --> latest version supported by pip until now?
