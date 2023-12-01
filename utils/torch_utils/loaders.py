@@ -40,7 +40,7 @@ class CropsDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         data, target = self.data[idx]
-        data = torch.from_numpy(data.astype('float32')).permute(1,0)   # Channel-lenght
+        data = torch.from_numpy(data.astype('float32')).permute(1,0)  # C-L for 1Dconvs
         target = torch.LongTensor([target])
         if self.transform:
             data = self.transform(data)
@@ -67,3 +67,6 @@ class CropsDataset(torch.utils.data.Dataset):
 
     def shuffle_N(self):
         random.shuffle(self.N)
+
+
+

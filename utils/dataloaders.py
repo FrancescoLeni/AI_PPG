@@ -144,6 +144,7 @@ class Crops():
         super().__init__()
         names_list = [N,V,S]
         for names in names_list:
+            print(f"loading {names}...")
             with h5py.File(parent / names, 'r') as file:
                 name = Path(names).stem
                 setattr(self, name, [file[key][:] for key in file.keys() if key != 'labels'])
