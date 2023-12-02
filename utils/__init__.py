@@ -2,6 +2,7 @@ import os
 import numpy as np
 import random
 import warnings
+import torch
 
 
 # fixes random states to same seed and silenced warnings
@@ -16,3 +17,6 @@ def random_state(seed):
     np.random.seed(seed)
 
     random.seed(seed)
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)

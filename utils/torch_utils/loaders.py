@@ -7,10 +7,13 @@ import torch
 
 # torch dataset builder for crops (to be used for CNN classifier for example)
 class CropsDataset(torch.utils.data.Dataset):
-    def __init__(self, data, mode="binary", transform = None, target_transform = None):
+    def __init__(self, data, mode="binary", transform = None, target_transform = None, stratify=True):
         """
             :param
-                --data: Crops object split for train, val, test respectiveli (e.g. data=Crops.train)
+                --data: Crops object split for train, val, test respectively (e.g. data=Crops.train)
+                --mode: ["binary", "all"] defines whether to work with binary or allclass problem
+                --stratify: whether to have equal class distribution in dataset (actually equal only for binary)
+                            (set to FALSE during test to exploit all data)
         """
         if mode not in ["binary", "all"]:
             raise ValueError(f"Mode {mode} not yet supported, chose between ""binary"" and ""all"" ")
@@ -30,10 +33,12 @@ class CropsDataset(torch.utils.data.Dataset):
 
         self.half_len = len(self.V)+len(self.S)
 
-        self.build()
-
         self.transform = transform
         self.target_transform = target_transform
+
+        self.stratify = stratify
+
+        self.build()
 
     def __len__(self):
         return len(self.data)
@@ -49,9 +54,12 @@ class CropsDataset(torch.utils.data.Dataset):
         return data, target
 
     def build(self):
-        self.shuffle_N()
-        N_ = self.N[0:self.half_len]
-        N = [(x, y) for x, y in zip(N_, list(np.zeros(self.half_len)))] # N labelled as 0
+        if self.stratify:
+            self.shuffle_N()
+            N_ = self.N[0:self.half_len]
+            N = [(x, y) for x, y in zip(N_, list(np.zeros(self.half_len)))] # N labelled as 0
+        else:
+            N = [(x, y) for x, y in zip(self.N, list(np.zeros(self.half_len)))]  # N labelled as 0
 
         if self.mode == "all":
             P = [(x, y) for x, y in zip(self.V, list(np.ones(len(self.V))))] + \
@@ -65,6 +73,7 @@ class CropsDataset(torch.utils.data.Dataset):
             setattr(self, 'data', N+P)
         random.shuffle(self.data)
 
+    # randomly shuffles over-numbered N sample for subsampling
     def shuffle_N(self):
         random.shuffle(self.N)
 
