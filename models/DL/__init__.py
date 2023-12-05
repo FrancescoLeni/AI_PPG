@@ -7,8 +7,6 @@ from tqdm import tqdm
 import numpy as np
 
 
-import time
-
 
 # SETTING GLOBAL VARIABLES
 TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}'
@@ -20,7 +18,8 @@ TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}'
 
 
 class ModelClass(nn.Module):
-    def __init__(self, model, loaders, device='gpu', callbacks=None, loss_fn=None, optimizer=None, metrics=None):
+    def __init__(self, model, loaders, device='gpu', callbacks=None, loss_fn=None, optimizer=None, metrics=None,
+                 loggers=None):
         super().__init__()
         """
         :param
@@ -48,9 +47,7 @@ class ModelClass(nn.Module):
 
         self.callbacks = callbacks
         self.metrics = metrics
-        # self.now_metrics = {"train_loss": None, "val_loss": None, "train_A": None, "val_A": None, "train_P": None,
-        #                     "val_P": None, "train_R": None, "val_R": None, "train_AUC": None, "val_AUC": None
-        #                     }
+        self.loggers = loggers
 
         self.loss_fun = loss_fn
         self.opt = optimizer
@@ -162,8 +159,11 @@ class ModelClass(nn.Module):
             # reshuffle for subsampling
             self.val_loader.dataset.build()
 
+            self.loggers.update()
             #resetting metrics
             self.metrics.on_epoch_end()
+
+
 
     def inference(self, return_preds=False):
         self.model.train(False)

@@ -267,20 +267,20 @@ class Metrics(BaseCallback):
             obj.on_train_batch_end(output, target, batch)
 
     def on_train_end(self, metrics=None):
-        self.dict["train_loss"] = np.float16(metrics)
+        self.dict["train_loss"] = [np.float16(metrics)]
         for obj in self.metrics:
             name = "train_" + obj.__class__.__name__
-            self.dict[name] = list(obj.t_value.to("cpu").numpy().astype(np.float16))
+            self.dict[name] = [[x] for x in obj.t_value.to("cpu").numpy().astype(np.float16)]
 
     def on_val_start(self):
         for obj in self.metrics:
             obj.on_val_start()
 
     def on_val_end(self, metrics=None, epoch=None):
-        self.dict["val_loss"] = np.float16(metrics)
+        self.dict["val_loss"] = [np.float16(metrics)]
         for obj in self.metrics:
             name = "val_" + obj.__class__.__name__
-            self.dict[name] = list(obj.v_value.to("cpu").numpy().astype(np.float16))
+            self.dict[name] = [[x] for x in obj.v_value.to("cpu").numpy().astype(np.float16)]
 
 
 
@@ -291,15 +291,12 @@ class Metrics(BaseCallback):
     def on_epoch_end(self, epoch=None):
         for obj in self.metrics:
             obj.on_epoch_end(epoch)
-        # for key in self.dict:
-        #     self.dict[key] = None
 
-    def build_metrics_dict(self):   # sta roba a senso metterla direttamente nel logger
 
-        names = [attr for attr in dir(self.metrics) if not callable(getattr(self.metrics, attr))
-                 and not attr.startswith("__") and attr != "metrics"]
+    def build_metrics_dict(self):
+
+        names = [obj.__class__.__name__ for obj in self.metrics]
         names.append("loss")
-        # devo aggiungere la loss
         keys = ["train_"+name for name in names]
         keys.extend(["val_"+name for name in names])
 

@@ -6,12 +6,19 @@ from pathlib import Path
 import os
 import pandas
 
+from utils import increment_path
 
 # ----------------------------------------------------------------------------------------------------------------------
 # BASE CALLBACK CLASS
 # ----------------------------------------------------------------------------------------------------------------------
 
 class BaseCallback:
+
+    def on_start(self):
+        pass
+
+    def on_end(self):
+        pass
 
     def on_train_start(self):
         pass
@@ -50,7 +57,7 @@ class BaseCallback:
 
 class EarlyStopping(BaseCallback):
 
-    def __init__(self, patience=30, monitor="vloss", mode='min'):
+    def __init__(self, patience=30, monitor="val_loss", mode='min'):
         super().__init__()
         self.mode = mode
         self.monitor = monitor
@@ -77,5 +84,77 @@ class EarlyStopping(BaseCallback):
     def on_epoch_end(self, epoch=None):
         if self.stop:
             raise StopIteration
+
+
+class Saver(BaseCallback):
+    def __init__(self, model, save_best=True, folder="runs", name="exp", monitor="val_loss", mode='min'):
+
+        self.model = model
+        self.monitor = monitor
+        self.mode = mode
+        self.best_fitness = 0.0  # validation
+        self.best_epoch = 0
+        self.save_path = increment_path(Path(folder)/name)
+        if not os.path.isdir(self.save_path):
+            os.mkdir(self.save_path)
+        self.save_best = save_best
+
+    def on_val_end(self, metrics=None, epoch=None):
+        if self.save_best:
+            fitness = metrics[self.monitor]
+            if self.mode == "min":
+                if fitness <= self.best_fitness:
+                    self.save(fitness, epoch)
+            elif self.mode == "max":
+                if fitness >= self.best_fitness:
+                    self.save(fitness, epoch)
+        else:
+            pass
+
+    def on_end(self):
+        torch.save(self.model, self.save_path / f"last.pt")
+
+    def save(self, fitness, epoch, name="best"):
+        self.best_fitness = fitness
+        if os.path.isfile(self.save_path / f"{name}_{self.best_epoch}.pt"):
+            os.remove(self.save_path / f"{name}_{self.best_epoch}.pt")
+        torch.save(self.model, self.save_path / f"{name}_{epoch}.pt")
+        self.best_epoch = epoch
+
+
+class Callbacks(BaseCallback):
+    def __init__(self, callbacks_list=[EarlyStopping]):
+
+        self.list = callbacks_list
+
+    def on_train_batch_end(self, output=None, target=None, batch=None):
+        for obj in self.list:
+            obj.on_train_batch_end(output, target, batch)
+
+    def on_val_start(self):
+        for obj in self.list:
+            obj.on_val_start()
+
+    def on_val_end(self, metrics=None, epoch=None):
+        for obj in self.list:
+            obj.on_val_end(metrics, epoch)
+
+    def on_val_batch_end(self, output=None, target=None, batch=None):
+        for obj in self.list:
+            obj.on_val_batch_end(output, target, batch)
+
+    def on_epoch_end(self, epoch=None):
+        for obj in self.list:
+            try:
+                obj.on_epoch_end(epoch)
+            except StopIteration:
+                print(f"Early Stopping at epoch {epoch}")
+
+    def on_end(self):
+        for obj in self.list:
+            obj.on_end()
+
+
+
 
 
