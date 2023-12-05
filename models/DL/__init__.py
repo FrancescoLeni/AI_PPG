@@ -31,7 +31,7 @@ class ModelClass(nn.Module):
         """
         self.model = model
         self.train_loader, self.val_loader, self.test_loader = loaders
-        if device=='gpu':
+        if device == 'gpu':
             if torch.cuda.is_available():
                 self.device = 'cuda:0'
                 gpu_properties = torch.cuda.get_device_properties(self.device)
@@ -39,6 +39,7 @@ class ModelClass(nn.Module):
             else:
                 print('no gpu found')
                 self.gpu_mem = 0
+                self.device = 'cpu'
         else:
             self.device = 'cpu'
 
@@ -47,6 +48,9 @@ class ModelClass(nn.Module):
 
         self.callbacks = callbacks
         self.metrics = metrics
+        # self.now_metrics = {"train_loss": None, "val_loss": None, "train_A": None, "val_A": None, "train_P": None,
+        #                     "val_P": None, "train_R": None, "val_R": None, "train_AUC": None, "val_AUC": None
+        #                     }
 
         self.loss_fun = loss_fn
         self.opt = optimizer
@@ -93,6 +97,7 @@ class ModelClass(nn.Module):
                                         f'AUC: {self.metrics.AuC.t_value_mean :.2f} ')
 
             torch.cuda.synchronize()
+        self.metrics.on_train_end(last_loss)
 
     def val_loop(self):
         running_loss = 0.0
@@ -133,6 +138,9 @@ class ModelClass(nn.Module):
                               f'val_P: {self.metrics.P.v_value_mean :.2f}, val_R: {self.metrics.R.v_value_mean :.2f}, ' \
                               f'val_AUC: {self.metrics.AuC.v_value_mean :.2f}'
                 pbar_loader.set_description(description)
+
+            self.metrics.on_val_end(metrics=last_loss)
+
 
 
 
@@ -187,7 +195,7 @@ class ModelClass(nn.Module):
                 self.metrics.on_val_batch_end(outputs, labels, batch)
 
                 # updating pbar
-                description = f'item: {i}/{len(self.test_loader)}, A: {self.metrics.A.v_value_mean :.2f}, ' \
+                description = f'item: {batch}/{len(self.test_loader)}, A: {self.metrics.A.v_value_mean :.2f}, ' \
                               f'P: {self.metrics.P.v_value_mean :.2f}, R: {self.metrics.R.v_value_mean :.2f}, ' \
                               f'AUC: {self.metrics.AuC.v_value_mean :.2f}'
                 pbar_loader.set_description(description)
@@ -198,6 +206,7 @@ class ModelClass(nn.Module):
 
         if return_preds:
             return outputs
+
 
 
 

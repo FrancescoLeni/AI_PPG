@@ -16,7 +16,7 @@ class BaseCallback:
     def on_train_start(self):
         pass
 
-    def on_train_end(self):
+    def on_train_end(self, metrics = None):
         pass
 
     def on_val_start(self):
