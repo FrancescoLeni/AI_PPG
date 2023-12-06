@@ -36,7 +36,9 @@ class LogsHolder(BaseCallback):
             else:
                 for i in range(len(self.metrics.dict[key])):
                     self.dict[key+f"_{i}"].append(self.metrics.dict[key][i][0])
-                self.dict[key].append(np.float16(sum(self.metrics.dict[key][i])/len(self.metrics.dict[key])))  # mean value
+                flat = [item[0] for item in self.metrics.dict[key]]
+                self.dict[key].append(np.float16(sum(flat)/len(flat)))  # mean value
+
 
 
 class SaveCSV(BaseCallback):
@@ -44,9 +46,8 @@ class SaveCSV(BaseCallback):
         :param
             --logs = LogsHolder object
     """
-    def __init__(self, logs, folder="runs", name="exp", exist_ok = True):
+    def __init__(self, logs, folder="runs", name="exp", exist_ok=True):
         super().__init__()
-        # RISOLVERE CASINO CON CREAZIONE PATH
         self.save_path = increment_path(Path(folder)/name, exist_ok=exist_ok)
         self.logs = logs
         self.file_name = "results.csv"
@@ -77,11 +78,49 @@ class SaveCSV(BaseCallback):
             df.to_csv(csv_path, mode='a', header=False, index=False)
 
 
+class SaveFigures(BaseCallback):
+    def __init__(self, logs, folder="runs", name="exp", exist_ok=True):
+        self.save_path = increment_path(Path(folder) / name, exist_ok=exist_ok)
+        self.logs = logs
+
+    def on_end(self):
+        self.save_metrics()
+
+    def save_metrics(self):
+        fig, axes = plt.subplots(nrows=2, ncols=3, figsize= (20, 11))
+
+        self.plot_metric("val_loss", axes[0,0])
+        self.plot_metric("Accuracy", axes[0, 1])
+        self.plot_metric("Precision", axes[0, 2])
+        self.plot_metric("train_loss", axes[1, 0])
+        self.plot_metric("AUC", axes[1, 1])
+        self.plot_metric("Recall", axes[1, 2])
+
+        fig.tight_layout()
+        plt.savefig(self.save_path / "metrics.png", dpi=96)
+
+    def plot_metric(self, metric, ax):
+        if "loss" not in metric:
+            for key in self.logs.dict:
+                if metric in key and "train_" not in key:
+                    if key[-1].isdigit():
+                        lab = key[-1]
+                    else:
+                        lab = "mean"
+                    ax.plot(range(len(self.logs.dict[key])), self.logs.dict[key], label=lab)
+            ax.legend()
+        else:
+            ax.plot(range(len(self.logs.dict[metric])), self.logs.dict[metric])
+        ax.set_title(metric)
+
+
+
 class Loggers(BaseCallback):
     def __init__(self, metrics, folder="runs", name="exp", exist_ok=True):
         super().__init__()
         self.logs = LogsHolder(metrics)
         self.csv = SaveCSV(self.logs, folder, name, exist_ok)
+        self.figure_saver=SaveFigures(self.logs, folder, name, exist_ok)
         self.build_list()
 
     def on_epoch_end(self, epoch=None):
@@ -91,6 +130,10 @@ class Loggers(BaseCallback):
     def on_epoch_start(self, epoch=None, max_epoch=None):
         for obj in self.list:
             obj.on_epoch_start(epoch, max_epoch)
+
+    def on_end(self):
+        for obj in self.list:
+            obj.on_end()
 
     def build_list(self):
         setattr(self, "list", [value for _, value in vars(self).items()])

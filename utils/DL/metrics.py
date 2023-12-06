@@ -254,7 +254,7 @@ class PRC(BaseMetric):
 
 
 class Metrics(BaseCallback):
-    def __init__(self, num_classes=2, device="gpu", top_k=1, thresh=0.5):
+    def __init__(self, num_classes=2, device="cpu", top_k=1, thresh=0.5):
         self.A = Accuracy(num_classes=num_classes, device=device, top_k=top_k, thresh=thresh)
         self.P = Precision(num_classes=num_classes, device=device, top_k=top_k, thresh=thresh)
         self.R = Recall(num_classes=num_classes, device=device, top_k=top_k, thresh=thresh)

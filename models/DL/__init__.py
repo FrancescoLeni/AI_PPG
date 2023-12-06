@@ -18,7 +18,7 @@ TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}'
 
 
 class ModelClass(nn.Module):
-    def __init__(self, model, loaders, device='gpu', callbacks=None, loss_fn=None, optimizer=None, metrics=None,
+    def __init__(self, model, loaders, device='cpu', callbacks=None, loss_fn=None, optimizer=None, metrics=None,
                  loggers=None):
         super().__init__()
         """
@@ -41,6 +41,7 @@ class ModelClass(nn.Module):
                 self.device = 'cpu'
         else:
             self.device = 'cpu'
+            self.gpu_mem = 0
 
         print(f"loading model to device={self.device}")
         self.model.to(self.device)
@@ -75,9 +76,12 @@ class ModelClass(nn.Module):
             self.opt.zero_grad()
 
             outputs = self.model(inputs)
+            del inputs
 
             loss = self.loss_fun(outputs, labs)
+
             loss.backward()
+
             self.opt.step()
 
             running_loss += loss.item()
@@ -85,14 +89,15 @@ class ModelClass(nn.Module):
             running_loss = 0.
 
             # computing training metrics
-            self.metrics.on_train_batch_end(outputs, labs, batch)
+            with torch.no_grad():
+                self.metrics.on_train_batch_end(outputs, labs, batch)
 
-            # updating pbar
+            #updating pbar
             pbar_loader.set_description(f'Epoch {epoch_index}/{tot_epochs-1}, GPU_mem: {gpu_used:.2f}/{self.gpu_mem:.2f}, '
-                                        f'train_loss: {last_loss:.4f}, A: {self.metrics.A.t_value_mean :.2f}, ' 
-                                        f'P: {self.metrics.P.t_value_mean :.2f}, R: {self.metrics.R.t_value_mean :.2f}, ' 
+                                        f'train_loss: {last_loss:.4f}, A: {self.metrics.A.t_value_mean :.2f}, '
+                                        f'P: {self.metrics.P.t_value_mean :.2f}, R: {self.metrics.R.t_value_mean :.2f}, '
                                         f'AUC: {self.metrics.AuC.t_value_mean :.2f} ')
-            if self.device is not "cpu":
+            if self.device != "cpu":
                 torch.cuda.synchronize()
 
         self.metrics.on_train_end(last_loss)
@@ -126,7 +131,7 @@ class ModelClass(nn.Module):
                 last_loss = running_loss #/ self.val_loader.batch_size  # loss per batch
                 running_loss = 0.0
 
-                if self.device is not "cpu":
+                if self.device != "cpu":
                     torch.cuda.synchronize()
 
                 # computing metrics on batch
@@ -147,6 +152,8 @@ class ModelClass(nn.Module):
 
         for epoch in range(num_epochs):
 
+            torch.cuda.empty_cache()
+
             self.metrics.on_epoch_start()
             self.loggers.on_epoch_start()
 
@@ -165,6 +172,8 @@ class ModelClass(nn.Module):
             self.loggers.on_epoch_end()
             #resetting metrics
             self.metrics.on_epoch_end()
+
+        self.loggers.on_end()
 
 
 
@@ -192,7 +201,7 @@ class ModelClass(nn.Module):
                 pred = np.uint8(np.argmax(output.to('cpu')))
                 outputs.append(pred)
 
-                if self.device is not "cpu":
+                if self.device != "cpu":
                     torch.cuda.synchronize()
 
                 # computing metrics on batch
