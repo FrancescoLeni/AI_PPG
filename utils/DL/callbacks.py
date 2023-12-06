@@ -87,14 +87,14 @@ class EarlyStopping(BaseCallback):
 
 
 class Saver(BaseCallback):
-    def __init__(self, model, save_best=True, folder="runs", name="exp", monitor="val_loss", mode='min'):
+    def __init__(self, model, save_best=True, folder="runs", name="exp", monitor="val_loss", mode='min', exist_ok = False):
 
         self.model = model
         self.monitor = monitor
         self.mode = mode
         self.best_fitness = 0.0  # validation
         self.best_epoch = 0
-        self.save_path = increment_path(Path(folder)/name)
+        self.save_path = increment_path(Path(folder)/name, exist_ok=exist_ok)
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
         self.save_best = save_best

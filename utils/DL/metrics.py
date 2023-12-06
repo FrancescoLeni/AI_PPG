@@ -261,6 +261,7 @@ class Metrics(BaseCallback):
         self.AuC = AUC(num_classes=num_classes, device=device, thresh=None)
         self.metrics = [self.A, self.P, self.R, self.AuC]
         self.build_metrics_dict()
+        self.num_classes=num_classes
 
     def on_train_batch_end(self, output=None, target=None, batch=None):
         for obj in self.metrics:

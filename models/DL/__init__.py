@@ -92,8 +92,9 @@ class ModelClass(nn.Module):
                                         f'train_loss: {last_loss:.4f}, A: {self.metrics.A.t_value_mean :.2f}, ' 
                                         f'P: {self.metrics.P.t_value_mean :.2f}, R: {self.metrics.R.t_value_mean :.2f}, ' 
                                         f'AUC: {self.metrics.AuC.t_value_mean :.2f} ')
+            if self.device is not "cpu":
+                torch.cuda.synchronize()
 
-            torch.cuda.synchronize()
         self.metrics.on_train_end(last_loss)
 
     def val_loop(self):
@@ -125,7 +126,8 @@ class ModelClass(nn.Module):
                 last_loss = running_loss #/ self.val_loader.batch_size  # loss per batch
                 running_loss = 0.0
 
-                torch.cuda.synchronize()
+                if self.device is not "cpu":
+                    torch.cuda.synchronize()
 
                 # computing metrics on batch
                 self.metrics.on_val_batch_end(outputs, labels, batch)
@@ -146,6 +148,7 @@ class ModelClass(nn.Module):
         for epoch in range(num_epochs):
 
             self.metrics.on_epoch_start()
+            self.loggers.on_epoch_start()
 
             self.model.train(True)
 
@@ -159,7 +162,7 @@ class ModelClass(nn.Module):
             # reshuffle for subsampling
             self.val_loader.dataset.build()
 
-            self.loggers.update()
+            self.loggers.on_epoch_end()
             #resetting metrics
             self.metrics.on_epoch_end()
 
@@ -189,7 +192,8 @@ class ModelClass(nn.Module):
                 pred = np.uint8(np.argmax(output.to('cpu')))
                 outputs.append(pred)
 
-                torch.cuda.synchronize()
+                if self.device is not "cpu":
+                    torch.cuda.synchronize()
 
                 # computing metrics on batch
                 self.metrics.on_val_batch_end(outputs, labels, batch)
