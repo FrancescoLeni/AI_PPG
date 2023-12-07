@@ -7,7 +7,7 @@ import torch
 
 # torch dataset builder for crops (to be used for CNN classifier for example)
 class CropsDataset(torch.utils.data.Dataset):
-    def __init__(self, data, mode="binary", transform = None, target_transform = None, stratify=True):
+    def __init__(self, data, mode="binary", transform=None, target_transform=None, stratify=True):
         """
             :param
                 --data: Crops object split for train, val, test respectively (e.g. data=Crops.train)

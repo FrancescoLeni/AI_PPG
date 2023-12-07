@@ -46,9 +46,9 @@ class SaveCSV(BaseCallback):
         :param
             --logs = LogsHolder object
     """
-    def __init__(self, logs, folder="runs", name="exp", exist_ok=True):
+    def __init__(self, logs, save_path):
         super().__init__()
-        self.save_path = increment_path(Path(folder)/name, exist_ok=exist_ok)
+        self.save_path = save_path
         self.logs = logs
         self.file_name = "results.csv"
         self.build_dict()
@@ -79,8 +79,8 @@ class SaveCSV(BaseCallback):
 
 
 class SaveFigures(BaseCallback):
-    def __init__(self, logs, folder="runs", name="exp", exist_ok=True):
-        self.save_path = increment_path(Path(folder) / name, exist_ok=exist_ok)
+    def __init__(self, logs, save_path):
+        self.save_path = save_path
         self.logs = logs
 
     def on_end(self):
@@ -98,6 +98,7 @@ class SaveFigures(BaseCallback):
 
         fig.tight_layout()
         plt.savefig(self.save_path / "metrics.png", dpi=96)
+        plt.close()
 
     def plot_metric(self, metric, ax):
         if "loss" not in metric:
@@ -114,13 +115,37 @@ class SaveFigures(BaseCallback):
         ax.set_title(metric)
 
 
+class LrLogger(BaseCallback):
+    def __init__(self, opt, save_path):
+        super().__init__()
+        self.opt = opt
+        self.save_path = save_path
+        self.log = []
+        self.last_epoch = 0
+
+    def on_epoch_end(self, epoch=None):
+        self.log.append(self.opt.param_groups[0]["lr"])
+        self.last_epoch = len(self.log)
+
+    def on_end(self):
+        self.save()
+
+    def save(self, name="lr.png"):
+        plt.figure(figsize=(20, 11))
+        plt.plot(range(self.last_epoch), self.log, marker='*')
+        plt.xlabel('Epoch')
+        plt.title('lr Scheduler')
+        plt.savefig(self.save_path / name, dpi=96)
+        plt.close()
+
 
 class Loggers(BaseCallback):
-    def __init__(self, metrics, folder="runs", name="exp", exist_ok=True):
+    def __init__(self, metrics, opt, save_path):
         super().__init__()
         self.logs = LogsHolder(metrics)
-        self.csv = SaveCSV(self.logs, folder, name, exist_ok)
-        self.figure_saver=SaveFigures(self.logs, folder, name, exist_ok)
+        self.csv = SaveCSV(self.logs, save_path)
+        self.lr = LrLogger(opt, save_path)
+        self.figure_saver = SaveFigures(self.logs, save_path)
         self.build_list()
 
     def on_epoch_end(self, epoch=None):

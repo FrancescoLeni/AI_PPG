@@ -4,6 +4,7 @@ import random
 import warnings
 import torch
 from pathlib import Path
+import json
 
 
 # fixes random states to same seed and silenced warnings
@@ -23,9 +24,9 @@ def random_state(seed):
     torch.cuda.manual_seed(seed)
 
 
-def increment_path(path, exist_ok=False, sep=''):
+def increment_path(folder="runs", name="exp", exist_ok=False, sep=''):
     # Increment file or directory path, i.e. runs/exp --> runs/exp{sep}2, runs/exp{sep}3, ... etc.
-    path = Path(path)  # os-agnostic
+    path = Path(folder) / name  # os-agnostic
     if path.exists() and not exist_ok:
         path, suffix = (path.with_suffix(''), path.suffix) if path.is_file() else (path, '')
         # Method 1
@@ -34,4 +35,17 @@ def increment_path(path, exist_ok=False, sep=''):
             if not os.path.exists(p):  #
                 break
         path = Path(p)
+    if not os.path.isdir(path):
+        os.mkdir(path)
+
+    print(f"saving folder is {path}")
     return path
+
+
+def json_from_parser(parser_args, save_path, name="arguments.json"):
+    args_dict = vars(parser_args)
+
+    save_path = save_path / name
+    with open(save_path, 'w') as json_file:
+        json.dump(args_dict, json_file, indent=2)
+
