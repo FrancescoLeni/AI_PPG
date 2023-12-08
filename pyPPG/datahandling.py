@@ -72,9 +72,9 @@ def load_data(data_path = "", fs = np.nan, start_sig = 0, end_sig = -1, channel=
 
     if sig_format=='mat':
         input_sig = scipy.io.loadmat(sig_path)
-        sig = np.float64(np.squeeze(input_sig.get("Data")))[0:]
+        sig = np.float64(np.squeeze(input_sig.get("ppg")))[0:] #edited
         try:
-            fs = np.squeeze(input_sig.get("Fs"))
+            fs = int(sig_path.split("_")[-1].split(".")[0])#edited
         except:
             fs = 125
             if print_flag: print('The default sampling frequency is 125 Hz for .mat.')
@@ -126,6 +126,7 @@ def load_data(data_path = "", fs = np.nan, start_sig = 0, end_sig = -1, channel=
     if start_sig<end_sig:
         s.end_sig = end_sig
     else:
+        print(sig)
         s.end_sig = len(sig)
 
     try:
