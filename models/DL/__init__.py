@@ -1,13 +1,9 @@
 import torch
-import torchvision
 import torch.nn as nn
-import torchvision.transforms as transforms
-import torchmetrics
+from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 import numpy as np
-
-
-import time
+from pathlib import Path
 
 
 # SETTING GLOBAL VARIABLES
@@ -20,7 +16,8 @@ TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}'
 
 
 class ModelClass(nn.Module):
-    def __init__(self, model, loaders, device='gpu', callbacks=None, loss_fn=None, optimizer=None, metrics=None):
+    def __init__(self, model, loaders, device='cpu', callbacks=None, loss_fn=None, optimizer=None, sched=None,
+                 metrics=None, loggers=None, AMP=True):
         super().__init__()
         """
         :param
@@ -29,9 +26,14 @@ class ModelClass(nn.Module):
             --device: str for gpu or cpu
             --metrics: metrics instance for computing metrics callbacks
         """
-        self.model = model
+
+        if isinstance(model, nn.Module):
+            self.model = model
+        else:
+            raise TypeError("model not recognised")
+
         self.train_loader, self.val_loader, self.test_loader = loaders
-        if device=='gpu':
+        if device == 'gpu':
             if torch.cuda.is_available():
                 self.device = 'cuda:0'
                 gpu_properties = torch.cuda.get_device_properties(self.device)
@@ -39,17 +41,28 @@ class ModelClass(nn.Module):
             else:
                 print('no gpu found')
                 self.gpu_mem = 0
+                self.device = 'cpu'
         else:
             self.device = 'cpu'
+            self.gpu_mem = 0
 
         print(f"loading model to device={self.device}")
         self.model.to(self.device)
 
         self.callbacks = callbacks
         self.metrics = metrics
+        self.loggers = loggers
 
-        self.loss_fun = loss_fn
+        self.loss_fun = loss_fn.to(self.device)
         self.opt = optimizer
+        self.sched = sched
+
+        if AMP and "cuda" in self.device:
+            print("eneabling Automatic Mixed Precision (AMP)")
+            self.AMP = True
+            self.scaler = GradScaler()
+        else:
+            self.AMP = False
 
 
     def train_one_epoch(self,epoch_index,tot_epochs):
@@ -73,33 +86,50 @@ class ModelClass(nn.Module):
 
             self.opt.zero_grad()
 
-            outputs = self.model(inputs)
+            if self.AMP:
+                with autocast():
+                    outputs = self.model(inputs)
+                    loss = self.loss_fun(outputs, labs)
+                    self.scaler.scale(loss).backward()
+                    self.scaler.step(self.opt)
+                    self.scaler.update()
+            else:
+                outputs = self.model(inputs)
+                loss = self.loss_fun(outputs, labs)
+                loss.backward()
+                self.opt.step()
 
-            loss = self.loss_fun(outputs, labs)
-            loss.backward()
-            self.opt.step()
+            del inputs
 
             running_loss += loss.item()
             last_loss = running_loss #/ self.train_loader.batch_size  # loss per batch
             running_loss = 0.
 
-            # computing training metrics
-            self.metrics.on_train_batch_end(outputs, labs, batch)
+            with torch.no_grad():
+                # computing training metrics
+                self.metrics.on_train_batch_end(outputs.float(), labs, batch)
+                # calling callbacks
+                self.callbacks.on_train_batch_end(outputs.float(), labs, batch)
 
-            # updating pbar
+            #updating pbar
             pbar_loader.set_description(f'Epoch {epoch_index}/{tot_epochs-1}, GPU_mem: {gpu_used:.2f}/{self.gpu_mem:.2f}, '
-                                        f'train_loss: {last_loss:.4f}, A: {self.metrics.A.t_value_mean :.2f}, ' 
-                                        f'P: {self.metrics.P.t_value_mean :.2f}, R: {self.metrics.R.t_value_mean :.2f}, ' 
+                                        f'train_loss: {last_loss:.4f}, A: {self.metrics.A.t_value_mean :.2f}, '
+                                        f'P: {self.metrics.P.t_value_mean :.2f}, R: {self.metrics.R.t_value_mean :.2f}, '
                                         f'AUC: {self.metrics.AuC.t_value_mean :.2f} ')
+            if self.device != "cpu":
+                torch.cuda.synchronize()
 
-            torch.cuda.synchronize()
+        # updating dictionary
+        self.metrics.on_train_end(last_loss)
 
-    def val_loop(self):
+    def val_loop(self, epoch):
         running_loss = 0.0
         last_loss = 0.0
 
         #resetting metrics for validation
         self.metrics.on_val_start()
+        # calling callbacks
+        self.callbacks.on_val_start()
 
         # initializing progress bar
         description = f'Validation'
@@ -123,10 +153,13 @@ class ModelClass(nn.Module):
                 last_loss = running_loss #/ self.val_loader.batch_size  # loss per batch
                 running_loss = 0.0
 
-                torch.cuda.synchronize()
+                if self.device != "cpu":
+                    torch.cuda.synchronize()
 
                 # computing metrics on batch
                 self.metrics.on_val_batch_end(outputs, labels, batch)
+                # calling callbacks
+                self.callbacks.on_val_batch_end(outputs, labels, batch)
 
                 # updating pbar
                 description = f'Validation: val_loss: {last_loss:.4f}, val_A: {self.metrics.A.v_value_mean :.2f}, ' \
@@ -134,13 +167,21 @@ class ModelClass(nn.Module):
                               f'val_AUC: {self.metrics.AuC.v_value_mean :.2f}'
                 pbar_loader.set_description(description)
 
+        # updating metrics dict
+        self.metrics.on_val_end(last_loss)
+        # calling callbacks
+        self.callbacks.on_val_end(self.metrics.dict, epoch)
+
 
 
     def train_loop(self, num_epochs):
 
         for epoch in range(num_epochs):
 
+            torch.cuda.empty_cache()
+
             self.metrics.on_epoch_start()
+            self.loggers.on_epoch_start()
 
             self.model.train(True)
 
@@ -150,12 +191,30 @@ class ModelClass(nn.Module):
             self.train_loader.dataset.build()
 
             # validation
-            self.val_loop()
+            self.val_loop(epoch)
+
             # reshuffle for subsampling
             self.val_loader.dataset.build()
 
+            # logging results
+            self.loggers.on_epoch_end()
+            # updating lr scheduler
+            if self.sched:
+                self.sched.step()
             #resetting metrics
             self.metrics.on_epoch_end()
+            # calling callbacks
+            try:
+                self.callbacks.on_epoch_end(epoch)
+            except StopIteration:  # (early stopping)
+                print(f"early stopping at epoch {epoch}")
+                break
+
+        # logging metrics images
+        self.loggers.on_end()
+        # calling callbacks (saving last model)
+        self.callbacks.on_end()
+
 
     def inference(self, return_preds=False):
         self.model.train(False)
@@ -181,13 +240,14 @@ class ModelClass(nn.Module):
                 pred = np.uint8(np.argmax(output.to('cpu')))
                 outputs.append(pred)
 
-                torch.cuda.synchronize()
+                if self.device != "cpu":
+                    torch.cuda.synchronize()
 
                 # computing metrics on batch
                 self.metrics.on_val_batch_end(outputs, labels, batch)
 
                 # updating pbar
-                description = f'item: {i}/{len(self.test_loader)}, A: {self.metrics.A.v_value_mean :.2f}, ' \
+                description = f'item: {batch}/{len(self.test_loader)}, A: {self.metrics.A.v_value_mean :.2f}, ' \
                               f'P: {self.metrics.P.v_value_mean :.2f}, R: {self.metrics.R.v_value_mean :.2f}, ' \
                               f'AUC: {self.metrics.AuC.v_value_mean :.2f}'
                 pbar_loader.set_description(description)
@@ -200,6 +260,13 @@ class ModelClass(nn.Module):
             return outputs
 
 
+def check_load_model(model):
+    if isinstance(model, nn.Module):
+        return model
+    elif isinstance(model, str) and Path(model).suffix == ".pt" or ".pth":
+        return torch.load(model)
+    else:
+        raise TypeError("model not recognised")
 
 
 

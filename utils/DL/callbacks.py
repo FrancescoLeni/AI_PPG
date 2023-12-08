@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import pandas
 
+from utils import increment_path
 
 # ----------------------------------------------------------------------------------------------------------------------
 # BASE CALLBACK CLASS
@@ -13,10 +14,16 @@ import pandas
 
 class BaseCallback:
 
+    def on_start(self):
+        pass
+
+    def on_end(self):
+        pass
+
     def on_train_start(self):
         pass
 
-    def on_train_end(self):
+    def on_train_end(self, metrics = None):
         pass
 
     def on_val_start(self):
@@ -50,7 +57,7 @@ class BaseCallback:
 
 class EarlyStopping(BaseCallback):
 
-    def __init__(self, patience=30, monitor="vloss", mode='min'):
+    def __init__(self, patience=30, monitor="val_loss", mode='min'):
         super().__init__()
         self.mode = mode
         self.monitor = monitor
@@ -61,7 +68,7 @@ class EarlyStopping(BaseCallback):
         self.stop = False
 
     def on_val_end(self, metrics=None, epoch=None):
-        fitness = metrics[self.monitor]
+        fitness = metrics[self.monitor][0]
         if self.mode == "min":
             if fitness <= self.best_fitness:
                 self.best_epoch = epoch
@@ -77,5 +84,82 @@ class EarlyStopping(BaseCallback):
     def on_epoch_end(self, epoch=None):
         if self.stop:
             raise StopIteration
+
+
+class Saver(BaseCallback):
+    def __init__(self, model, save_path, save_best=True,  monitor="val_loss", mode='min'):
+
+        self.model = model
+        self.monitor = monitor
+        self.mode = mode
+        if mode == "min":
+            self.best_fitness = 1.1  # validation
+        elif mode == "max":
+            self.best_fitness = 0.0  # validation
+        else:
+            raise TypeError("mode not recognized, use ['min', 'max']")
+        self.best_epoch = 0
+        self.save_path = save_path
+        self.save_best = save_best
+        if not os.path.isdir(self.save_path / "weights"):
+            os.mkdir(self.save_path / "weights")
+
+    def on_val_end(self, metrics=None, epoch=None):
+        if self.save_best:
+            fitness = metrics[self.monitor][0]
+            if self.mode == "min":
+                if fitness <= self.best_fitness:
+                    self.save(fitness, epoch)
+            elif self.mode == "max":
+                if fitness >= self.best_fitness:
+                    self.save(fitness, epoch)
+        else:
+            pass
+
+    def on_end(self):
+        torch.save(self.model, self.save_path / f"last.pt")
+        print(f"model saved to {self.save_path}")
+
+    def save(self, fitness, epoch, name="best"):
+        self.best_fitness = fitness
+        if os.path.isfile(self.save_path / "weights" / f"{name}_{self.best_epoch}.pt"):
+            os.remove(self.save_path / "weights" / f"{name}_{self.best_epoch}.pt")
+        torch.save(self.model, self.save_path / "weights" / f"{name}_{epoch}.pt")
+        print("saved best")
+        self.best_epoch = epoch
+
+
+class Callbacks(BaseCallback):
+    def __init__(self, callbacks_list):
+
+        self.list = callbacks_list
+
+    def on_train_batch_end(self, output=None, target=None, batch=None):
+        for obj in self.list:
+            obj.on_train_batch_end(output, target, batch)
+
+    def on_val_start(self):
+        for obj in self.list:
+            obj.on_val_start()
+
+    def on_val_end(self, metrics=None, epoch=None):
+        for obj in self.list:
+            obj.on_val_end(metrics, epoch)
+
+    def on_val_batch_end(self, output=None, target=None, batch=None):
+        for obj in self.list:
+            obj.on_val_batch_end(output, target, batch)
+
+    def on_epoch_end(self, epoch=None):
+        for obj in self.list:
+            obj.on_epoch_end(epoch)
+
+
+    def on_end(self):
+        for obj in self.list:
+            obj.on_end()
+
+
+
 
 
