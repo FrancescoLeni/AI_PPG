@@ -61,7 +61,10 @@ class EarlyStopping(BaseCallback):
         super().__init__()
         self.mode = mode
         self.monitor = monitor
-        self.best_fitness = 0.0  # validation
+        if mode == 'max':
+            self.best_fitness = 0.0
+        if mode == 'min':
+            self.best_fitness = 1000.0
         self.best_epoch = 0
         self.patience = patience or float('inf')  # epochs to wait after fitness stops improving to stop
         self.possible_stop = False  # possible stop may occur next epoch
