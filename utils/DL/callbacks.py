@@ -120,7 +120,7 @@ class Saver(BaseCallback):
             pass
 
     def on_end(self):
-        torch.save(self.model, self.save_path / f"last.pt")
+        torch.save(self.model, self.save_path / f"weights/last.pt")
         print(f"model saved to {self.save_path}")
 
     def save(self, fitness, epoch, name="best"):
