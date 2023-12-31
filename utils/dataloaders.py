@@ -45,6 +45,14 @@ class OneSignal:
         self.peaks = scipy.io.loadmat(self.peaks_path)['speaks']
         self.labels = scipy.io.loadmat(self.label_path)['labels']
 
+
+
+        self.v = np.squeeze(self.raw)
+        correction = pd.DataFrame()
+        corr_on = ['on', 'dn', 'dp', 'v', 'w', 'f']
+        correction.loc[0, corr_on] = True
+        self.correction = correction
+
         self.indx = 0 # peak to crop
         self.indx_max = int(self.peaks.shape[0])
 
@@ -75,6 +83,11 @@ class OneSignal:
         s = PPG(s)
         fpex = FpCollection(s=s)
         fiducials = fpex.get_fiducials(s=s, ext_peaks= self.peaks)
+
+        #added by SAMUEL
+        self.fiducials = fiducials #still need conversion to Fiducials class
+        self.s = s
+
 
         self.on = list(fiducials['on'][:]) # here i'm wasting a lot more points (and time for calculating them...)
 

@@ -4,3 +4,5 @@
 # Folders to ignore
 /runs/
 /dataset/
+/venvPPG/
+/temp_dir/
