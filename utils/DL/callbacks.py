@@ -61,7 +61,10 @@ class EarlyStopping(BaseCallback):
         super().__init__()
         self.mode = mode
         self.monitor = monitor
-        self.best_fitness = 0.0  # validation
+        if mode == 'max':
+            self.best_fitness = 0.0
+        if mode == 'min':
+            self.best_fitness = 1000.0
         self.best_epoch = 0
         self.patience = patience or float('inf')  # epochs to wait after fitness stops improving to stop
         self.possible_stop = False  # possible stop may occur next epoch
@@ -117,7 +120,7 @@ class Saver(BaseCallback):
             pass
 
     def on_end(self):
-        torch.save(self.model, self.save_path / f"last.pt")
+        torch.save(self.model, self.save_path / f"weights/last.pt")
         print(f"model saved to {self.save_path}")
 
     def save(self, fitness, epoch, name="best"):

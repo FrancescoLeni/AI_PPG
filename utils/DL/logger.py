@@ -1,13 +1,8 @@
 import pandas as pd
-import torch
-import torchvision
 import numpy as np
 from matplotlib import pyplot as plt
-from pathlib import Path
 import os
-import pandas
 
-from utils import increment_path
 from utils.DL.callbacks import BaseCallback
 
 
@@ -38,7 +33,6 @@ class LogsHolder(BaseCallback):
                     self.dict[key+f"_{i}"].append(self.metrics.dict[key][i][0])
                 flat = [item[0] for item in self.metrics.dict[key]]
                 self.dict[key].append(np.float16(sum(flat)/len(flat)))  # mean value
-
 
 
 class SaveCSV(BaseCallback):

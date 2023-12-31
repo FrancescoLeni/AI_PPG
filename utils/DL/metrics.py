@@ -2,13 +2,8 @@
 from utils.DL.callbacks import BaseCallback
 
 import torch
-import torchvision
 import torchmetrics
 import numpy as np
-from matplotlib import pyplot as plt
-from pathlib import Path
-import os
-import pandas
 
 
 class BaseMetric(BaseCallback):
