@@ -89,9 +89,11 @@ for sample in os.listdir(data_path):
 
     signal = OneSignal(sample)
     signal.filter(fL = 0.5, fH = 4.3, order = 4)
+    # Align onsets to determine crops: always 1 peak between 2 onsets
+    signal.align_onsets()
 
     while(signal.indx < signal.indx_max):
-
+        
         x, y = signal.crop()
 
         if y == 'N':

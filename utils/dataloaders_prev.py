@@ -1,10 +1,6 @@
-
 from preprocessing.filtering import Preprocess
 from preprocessing.fiducials import FpCollection
 from preprocessing import PPG
-
-from preprocessing import Fiducials, Biomarkers
-import pyPPG.biomarkers as BM
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
@@ -16,6 +12,7 @@ import scipy.io
 import random
 import os
 import h5py
+
 
 class OneSignal:
     def __init__(self, data_name = None):
@@ -43,9 +40,11 @@ class OneSignal:
         self.vpg = "call .filter() to calculate"
         self.jpg = "call .filter() to calculate"
         self.apg = "call .filter() to calculate"
-        # self.on = "call .filter() to calculate"
+        self.on = "call .filter() to calculate"
         self.peaks = scipy.io.loadmat(self.peaks_path)['speaks']
         self.labels = scipy.io.loadmat(self.label_path)['labels']
+
+
 
         self.v = np.squeeze(self.raw)
         correction = pd.DataFrame()
@@ -53,14 +52,13 @@ class OneSignal:
         correction.loc[0, corr_on] = True
         self.correction = correction
 
-        # Prepare onset alignment with provided peaks (from fiducials)
         self.indx = 0 # peak to crop
         self.indx_max = int(self.peaks.shape[0])
 
     def filter(self, fL=0.8, fH=3.3, order=4, sm = {'ppg':50,'vpg':10,'apg':10,'jpg':10}, data_min= -90, data_max= 90):
 
         print(f'filtering signal {self.name}...')
-        # Class which the functions need...
+        # stupid class that the functions need...
         s = DotMap()
         s.end_sig = -1
         s.v = np.squeeze(self.raw)
@@ -72,7 +70,7 @@ class OneSignal:
         correction.loc[0, corr_on] = True
         s.correct = correction
 
-        # Filters signal through BP filter [fL,fH]
+        #filters signal through BP filter [fL,fH]
         prep = Preprocess(fL=fL, fH=fH, order=order, sm_wins=sm)
         s.ppg, s.vpg, s.apg, s.jpg = prep.get_signals(s=s)
         self.ppg = s.ppg
@@ -80,86 +78,78 @@ class OneSignal:
         self.apg = s.apg
         self.jpg = s.jpg
 
-        self.s = PPG(s)
+        # get on_set points
+        s = PPG(s)
+        fpex = FpCollection(s=s)
+        fiducials = fpex.get_fiducials(s=s, ext_peaks= self.peaks)
 
-    def get_fiducials(self):
-        # Initialize fiducials package
-        fpex = FpCollection(s=self.s)
-        # Extract fiducial points (e.g. 'on': peak onsets)
-        fiducials = fpex.get_fiducials(s=self.s, ext_peaks=self.peaks)
-        # Create a fiducials class
-        self.fp = Fiducials(fiducials)
+        #added by SAMUEL
+        self.fiducials = fiducials #still need conversion to Fiducials class
+        self.s = s
 
-    def get_biomarkers(self):
-        # Initialize biomarkers package
-        bmex = BM.BmCollection(s=self.s, fp=self.fp)
-        # Extract biomarkers
-        bm_defs, bm_vals, bm_stats = bmex.get_biomarkers()
 
-        # tmp_keys=bm_stats.keys()
-        # print('Statistics of the biomarkers:')
-        # for i in tmp_keys: print(i,'\n',bm_stats[i])
+        self.on = list(fiducials['on'][:]) # here i'm wasting a lot more points (and time for calculating them...)
 
-        # Create a biomarkers class
-        self.bm = Biomarkers(bm_defs, bm_vals, bm_stats)
+        self.add_onsets()
 
-    def align_onsets(self):
-        # Prepare onset alignment with provided peaks (from fiducials)
-        self.get_fiducials()
-        onsets, peaks = list(self.fp.get_fp().on).copy(), list(self.peaks.flatten())
-        
-        # Always include the first onset in the filtered list
-        # If no onset detected before first peak
-        if onsets[0] >= peaks[0]:
-            print('No onset detected before first peak')
-            filtered_onsets = [0]
-            # Remaining onsets to be considered: all of them
-            remaining_onsets = onsets
-        else:
-            onsets_before_first_peak = [onset for onset in onsets if onset < peaks[0]]
-            filtered_onsets = [onsets_before_first_peak[-1]]
-            # Remaining onsets to be considered: 
-            remaining_onsets = onsets[len(onsets_before_first_peak):]
-        
-        # Iterate through peaks to determine the closest onset for each peak
-        for i in range(len(peaks) - 1):
-            # Current and next peaks
-            peak = peaks[i]
-            next_peak = peaks[i + 1]
+        self.normalize(data_min, data_max)
 
-            # Find the onsets that lie between the current and next peak
-            possible_onsets = [onset for onset in remaining_onsets if (peak < onset) and (onset < next_peak)]
+    def get_crops(self):
 
-            if not possible_onsets:
-                # If no onset is detected between two peaks, add one in the middle
-                middle_onset = int((peak + next_peak) / 2)
-                filtered_onsets.append(middle_onset)
-                # print('onset added at: ', middle_onset)
-            else:
-                # Find the onset that minimizes the distance to the next peak
-                closest_onset = min(possible_onsets, key=lambda x: abs(x - next_peak))
-                # Include the closest onset in the filtered list
-                filtered_onsets.append(closest_onset)
-                # Remove the chosen onset from the remaining onsets
-                remaining_onsets = [onset for onset in remaining_onsets if (onset not in possible_onsets) and (onset > next_peak)]
-                # if len(possible_onsets) >= 2:
-                #     print('multiple onsets between peaks: ', possible_onsets)
+        crops = []
+        labs = []
+        while (self.indx < self.indx_max):
+            x, y = self.crop()
+            crops.append(x)
+            labs.append(y)
+        return (crops,labs)
 
-        # Include the last onset in the filtered list
-        if remaining_onsets:
-            # print('remaining onsets: ', remaining_onsets)
-            filtered_onsets.append(remaining_onsets[-1])
-        else:
-            # print('added end of signal')
-            filtered_onsets.append(int(len(self.ppg)-1))
-        
-        self.on = np.array(filtered_onsets, dtype=int)
-    
+    def normalize(self, data_min, data_max):
+        new = self.ppg.reshape(-1, 1)
+        scaler = MinMaxScaler()
+
+        scaler.data_min_ = data_min
+        scaler.data_max_ = data_max
+
+        self.ppg = scaler.fit_transform(new)
+
+    def add_onsets(self):
+        k = 0
+        o = []
+        for i in range(len(self.on) - 1):
+            o.append(self.on[i])
+            o2 = self.on[i + 1]
+            p = self.peaks[k]
+            p2 = self.peaks[k + 1]
+            p3 = self.peaks[k + 2]
+            k += 1
+            if p2 < o2:
+                o.append(int((p + p2) // 2))
+                k += 1
+                if p3 < o2:
+                    o.append(int((p3 + p2) // 2))
+                    k += 1
+            if i == (len(self.on) - 2):
+                o.append(o2)
+        if o[-1] < self.peaks[-3]:
+            o.append(int((self.peaks[-4] + self.peaks[-3]) // 2))
+        if o[-1] < self.peaks[-2]:
+            o.append(int((self.peaks[-3]+self.peaks[-2]) // 2))
+        if o[-1] < self.peaks[-1]:
+            o.append(int((self.peaks[-2] + self.peaks[-1]) // 2))
+        o.append(int(len(self.ppg)-1))
+
+        self.on = np.array(o, dtype=int)
+
+
     def crop(self):
+
         crop = self.ppg[self.on[self.indx]:self.on[self.indx+1]]
         lab = self.labels[self.indx]
         self.indx+=1
-        return (crop, lab)
+        return (crop,lab)
+
+
 
 class Crops():
     def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops'), seed=36):
@@ -175,6 +165,7 @@ class Crops():
         self.seed = seed
 
     def split(self, test_size=.15):
+
         x = self.V_crops + self.S_crops + self.N_crops
         y = self.V_labels + self.S_labels + self.N_labels
 
