@@ -43,7 +43,8 @@ class ConvNeXt(nn.Module):
 
         self.stem = CNeXtStem(1, self.C[0])
 
-        self.S = nn.ModuleList([nn.Sequential(*(CNeXtBlock(self.C[i], drop_path=drop_path) for _ in range(self.B[i]))) for i in range(4)])
+        self.S = nn.ModuleList([nn.Sequential(*(CNeXtBlock(self.C[i], drop_path=drop_path, layer_scale_init_value=0)
+                                                for _ in range(self.B[i]))) for i in range(4)])
         self.DownSample = nn.ModuleList([CNeXtDownSample(self.C[i], self.C[i+1], 2, 2, 0) for i in range(3)])
 
         self.classifier = nn.Sequential(nn.Linear(self.C[-1], self.C[-1]//4),

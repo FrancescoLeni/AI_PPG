@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from models.DL import ModelClass, check_load_model
 from models.DL.common import Dummy, ConvNeXt
-from utils.dataloaders import Crops
+from utils.dataloaders_prev import Crops
 from utils.DL.callbacks import Callbacks, EarlyStopping, Saver
 from utils.DL.loaders import CropsDataset
 from utils.DL.optimizers import get_optimizer, scheduler
