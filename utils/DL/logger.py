@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+import torch
+import torchmetrics
 
 from utils.DL.callbacks import BaseCallback
 
@@ -133,18 +135,193 @@ class LrLogger(BaseCallback):
         plt.close()
 
 
+class ROClogger(BaseCallback):
+    """
+       :param
+           --num_classes: number of classes
+           --device: device "cpu" or "gpu"
+           --thresh: Threshold for transforming probability to binary {0,1} predictions (ONLY if binary)
+       """
+
+    def __init__(self, save_path, num_classes=2, device='gpu', thresh=None):
+        super().__init__()
+
+        if device == "gpu" and torch.cuda.is_available():
+            self.device = 'cuda:0'
+        else:
+            self.device = "cpu"
+
+        self.save_path = save_path
+
+        self.run = False
+        self.num_classes = num_classes
+
+        self.metric = torchmetrics.classification.ROC(task="multiclass", num_classes=num_classes,
+                                                      thresholds=thresh).to(self.device)
+
+        self.fpr = None
+        self.tpr = None
+        self.thresh = None
+
+    def on_val_batch_end(self, output=None, target=None, batch=None):
+        if self.run:
+            output = output
+            target = target
+            if not hasattr(self, "preds"):
+                setattr(self, "preds", output)
+                setattr(self, "labs", target)
+            else:
+                self.preds = torch.cat([self.preds, output], dim=0)
+                self.labs = torch.cat([self.labs, target], dim=0)
+        else:
+            pass
+
+    def on_val_end(self, metrics=None, epoch=None):
+        if self.run:
+            self.fpr, self.tpr, self.thresh = self.metric(self.preds, self.labs)
+            self.metric.reset()
+            self.preds = 0
+            self.labs = 0
+        else:
+            pass
+
+    def on_end(self):
+        fig, ax = plt.subplots(1, 1, figsize=(20, 11))
+        if self.num_classes == 2:
+            self.metric.plot(curve=(self.fpr[1], self.tpr[1], self.thresh[1]), score=True, ax=ax)
+        else:
+            self.metric.plot(curve=(self.fpr, self.tpr, self.thresh), score=True, ax=ax)
+        ax.plot([0, 1], [0, 1], color='darkblue', linestyle='--')
+
+        plt.tight_layout()
+        plt.savefig(self.save_path / 'ROC.png', dpi=96)
+        plt.close()
+
+    def on_epoch_start(self, epoch=None, max_epoch=None):
+        if epoch == max_epoch - 1:
+            self.run = True
+        else:
+            pass
+
+
+class PRClogger(BaseCallback):
+    """
+       :param
+           --num_classes: number of classes
+           --device: device "cpu" or "gpu"
+           --thresh: Threshold for transforming probability to binary {0,1} predictions (ONLY if binary)
+       """
+
+    def __init__(self, save_path, num_classes=2, device='gpu', thresh=None):
+        super().__init__()
+
+        if device == "gpu" and torch.cuda.is_available():
+            self.device = 'cuda:0'
+        else:
+            self.device = "cpu"
+
+        self.save_path = save_path
+        self.run = False
+        self.num_classes = num_classes
+
+        self.metric = torchmetrics.classification.PrecisionRecallCurve(task="multiclass", num_classes=num_classes,
+                                                                       thresholds=thresh).to(self.device)
+
+        self.metric_best_P = torchmetrics.classification.PrecisionAtFixedRecall(task='multiclass', min_recall=0.5,
+                                                                                num_classes=num_classes).to(self.device)
+        self.metric_best_R = torchmetrics.classification.RecallAtFixedPrecision(task='multiclass', min_precision=0.5,
+                                                                                num_classes=num_classes).to(self.device)
+
+        self.P = None
+        self.R = None
+        self.thresh = None  # REMEMBER TO SWAP ORDER [::-1]
+        self.best_P = None
+        self.best_R = None
+        self.best_P_th = None
+        self.best_R_th = None
+
+    def on_val_batch_end(self, output=None, target=None, batch=None):
+        if self.run:
+            output = output.to("cpu")
+            target = target.to("cpu")
+            if not hasattr(self, "preds"):
+                setattr(self, "preds", output)
+                setattr(self, "labs", target)
+            else:
+                self.preds = torch.cat([self.preds, output], dim=0)
+                self.labs = torch.cat([self.labs, target], dim=0)
+        else:
+            pass
+
+    def on_val_end(self, metrics=None, epoch=None):
+        if self.run:
+            self.P, self.R, self.thresh = self.metric(self.preds, self.labs)
+            self.metric.reset()
+            self.best_P, self.best_P_th = self.metric_best_P(self.preds, self.labs)
+            self.best_R, self.best_R_th = self.metric_best_R(self.preds, self.labs)
+            self.metric_best_P.reset()
+            self.metric_best_R.reset()
+            self.preds = 0
+            self.labs = 0
+        else:
+            pass
+
+    def on_end(self):
+        fig, ax = plt.subplots(1, 1, figsize=(20, 11))
+        if self.num_classes == 2:
+            self.metric.plot(curve=(self.R[1], self.P[1], self.thresh[::-1][1]), score=True, ax=ax)
+        else:
+            self.metric.plot(curve=(self.R, self.P, self.thresh[::-1]), score=True, ax=ax)
+        text_content = self.get_text()
+        ax.text(1.01, 0.97, text_content, bbox=dict(boxstyle='round', facecolor='white', alpha=0.5),
+                transform=plt.gca().transAxes, va='top', ha='left', fontsize=12)
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+
+        plt.tight_layout()
+        plt.savefig(self.save_path / 'PRC.png', dpi=96)
+        plt.close()
+
+    def on_epoch_start(self, epoch=None, max_epoch=None):
+        if epoch == max_epoch-1:
+            self.run = True
+        else:
+            pass
+
+    def get_text(self):
+        sep = '\n'
+        rows = ['BEST METRICS']
+        if self.num_classes != 2:
+            for i, ((P, th_P), (R, th_R)) in enumerate(zip(zip(self.best_P, self.best_P_th), zip(self.best_R, self.best_R_th))):
+                rows.append(f'class {i}: P = {P :.2f} at {th_P :.2f}; R = {R :.2f} at {th_R :.2f}')
+        else:
+            rows.append(f'class {1}: P = {self.best_P[1] :.2f} at {self.best_P_th[1] :.2f}; R = {self.best_R[1] :.2f} at {self.best_R_th[1] :.2f}')
+
+        return sep.join(rows)
+
+
 class Loggers(BaseCallback):
-    def __init__(self, metrics, opt, save_path):
+    def __init__(self, metrics, opt, save_path, device):
         super().__init__()
         self.logs = LogsHolder(metrics)
         self.csv = SaveCSV(self.logs, save_path)
         self.lr = LrLogger(opt, save_path)
         self.figure_saver = SaveFigures(self.logs, save_path)
+        self.ROC = ROClogger(save_path, num_classes=metrics.num_classes, device=device)
+        self.PRC = PRClogger(save_path, num_classes=metrics.num_classes, device=device)
         self.build_list()
 
     def on_epoch_end(self, epoch=None):
         for obj in self.list:
             obj.on_epoch_end(epoch)
+
+    def on_val_batch_end(self, output=None, target=None, batch=None):
+        for obj in self.list:
+            obj.on_val_batch_end(output, target, batch)
+
+    def on_val_end(self, metrics=None, epoch=None):
+        for obj in self.list:
+            obj.on_val_end(metrics, epoch)
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
         for obj in self.list:

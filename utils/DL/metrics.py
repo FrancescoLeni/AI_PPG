@@ -99,7 +99,6 @@ class Recall(BaseMetric):
                                                              top_k=top_k, average=None).to(self.device)
 
 
-
 class AUC(BaseMetric):
     """
     :param
@@ -112,140 +111,6 @@ class AUC(BaseMetric):
 
         self.metric = torchmetrics.classification.AUROC(task="multiclass", num_classes=num_classes,
                                                         average=None, thresholds=thresh).to(self.device)
-
-
-
-class ROC(BaseMetric):
-    """
-       :param
-           --num_classes: number of classes
-           --device: device "cpu" or "gpu"
-           --thresh: Threshold for transforming probability to binary {0,1} predictions (ONLY if binary)
-       """
-
-    def __init__(self, num_classes=2, device="cpu", thresh=None):
-        super().__init__(num_classes, device)
-
-        self.run = False
-
-        self.metric = torchmetrics.classification.ROC(task="multiclass", num_classes=num_classes,
-                                                      thresholds=thresh).to(self.device)
-
-        self.fpr = None
-        self.tpr = None
-        self.thresh = None
-
-    def on_train_batch_end(self, output=None, target=None, batch=None):
-        pass
-
-    def on_val_start(self):
-        pass
-
-    def on_val_batch_end(self, output=None, target=None, batch=None):
-        if self.run:
-            if self.device == "cpu":
-                output = output.to("cpu")
-                target = target.to("cpu")
-            if not hasattr(self, "preds"):
-                setattr(self, "preds", output)
-                setattr(self, "labs", target)
-            else:
-                self.preds = torch.cat([self.preds, output], dim=0)
-                self.labs = torch.cat([self.labs, target], dim=0)
-        else:
-            pass
-
-    def on_val_end(self, metrics=None, epoch=None):
-        if self.run:
-            self.fpr, self.tpr, self.thresh = self.metric(self.preds, self.labs)
-            self.metric.reset()
-            self.preds = 0
-            self.labs = 0
-        else:
-            pass
-
-    def on_epoch_end(self, epoch=None):
-        pass
-
-    def on_epoch_start(self, epoch=None, max_epoch=None):
-        if epoch == max_epoch-1:
-            self.run = True
-        else:
-            pass
-
-
-class PRC(BaseMetric):
-    """
-       :param
-           --num_classes: number of classes
-           --device: device "cpu" or "gpu"
-           --thresh: Threshold for transforming probability to binary {0,1} predictions (ONLY if binary)
-       """
-
-    def __init__(self, num_classes=2, device="cpu", thresh=None):
-        super().__init__(num_classes, device)
-
-        self.run = False
-
-        self.metric = torchmetrics.classification.PrecisionRecallCurve(task="multiclass", num_classes=num_classes,
-                                                                       thresholds=thresh).to(self.device)
-
-        self.metric_best_P = torchmetrics.classification.PrecisionAtFixedRecall(task='multiclass', min_recall=0.5,
-                                                                                num_classes=num_classes)
-        self.metric_best_R = torchmetrics.classification.RecallAtFixedPrecision(task='multiclass', min_precision=0.5,
-                                                                                num_classes=num_classes)
-
-
-        self.P = None
-        self.R = None
-        self.thresh = None  # REMEMBER TO SWAP ORDER [::-1]
-        self.best_P = None
-        self.best_R = None
-        self.best_P_th = None
-        self.best_R_th = None
-
-
-    def on_train_batch_end(self, output=None, target=None, batch=None):
-        pass
-
-    def on_val_start(self):
-        pass
-
-    def on_val_batch_end(self, output=None, target=None, batch=None):
-        if self.run:
-            if self.device == "cpu":
-                output = output.to("cpu")
-                target = target.to("cpu")
-            if not hasattr(self, "preds"):
-                setattr(self, "preds", output)
-                setattr(self, "labs", target)
-            else:
-                self.preds = torch.cat([self.preds, output], dim=0)
-                self.labs = torch.cat([self.labs, target], dim=0)
-        else:
-            pass
-
-    def on_val_end(self, metrics=None, epoch=None):
-        if self.run:
-            self.P, self.R, self.thresh = self.metric(self.preds, self.labs)
-            self.metric.reset()
-            self.best_P, self.best_P_th = self.metric_best_P(self.preds, self.labs)
-            self.best_R, self.best_R_th = self.metric_best_R(self.preds, self.labs)
-            self.metric_best_P.reset()
-            self.metric_best_R.reset()
-            self.preds = 0
-            self.labs = 0
-        else:
-            pass
-
-    def on_epoch_end(self, epoch=None):
-        pass
-
-    def on_epoch_start(self, epoch=None, max_epoch=None):
-        if epoch == max_epoch-1:
-            self.run = True
-        else:
-            pass
 
 
 class Metrics(BaseCallback):
@@ -278,8 +143,6 @@ class Metrics(BaseCallback):
             name = "val_" + obj.__class__.__name__
             self.dict[name] = [[x] for x in obj.v_value.to("cpu").numpy().astype(np.float16)]
 
-
-
     def on_val_batch_end(self, output=None, target=None, batch=None):
         for obj in self.metrics:
             obj.on_val_batch_end(output, target, batch)
@@ -287,7 +150,6 @@ class Metrics(BaseCallback):
     def on_epoch_end(self, epoch=None):
         for obj in self.metrics:
             obj.on_epoch_end(epoch)
-
 
     def build_metrics_dict(self):
 

@@ -112,10 +112,19 @@ class ModelClass(nn.Module):
                 self.callbacks.on_train_batch_end(outputs.float(), labs, batch)
 
             #updating pbar
+            if self.metrics.num_classes != 2:
+                A = self.metrics.A.t_value_mean
+                P = self.metrics.P.t_value_mean
+                R = self.metrics.R.t_value_mean
+                AUC = self.metrics.AuC.t_value_mean
+            else:
+                A = self.metrics.A.t_value[1]
+                P = self.metrics.P.t_value[1]
+                R = self.metrics.R.t_value[1]
+                AUC = self.metrics.AuC.t_value[1]
+
             pbar_loader.set_description(f'Epoch {epoch_index}/{tot_epochs-1}, GPU_mem: {gpu_used:.2f}/{self.gpu_mem:.2f}, '
-                                        f'train_loss: {last_loss:.4f}, A: {self.metrics.A.t_value_mean :.2f}, '
-                                        f'P: {self.metrics.P.t_value_mean :.2f}, R: {self.metrics.R.t_value_mean :.2f}, '
-                                        f'AUC: {self.metrics.AuC.t_value_mean :.2f} ')
+                                        f'train_loss: {last_loss:.4f}, A: {A :.2f}, P: {P :.2f}, R: {R :.2f}, AUC: {AUC :.2f}')
             if self.device != "cpu":
                 torch.cuda.synchronize()
 
@@ -158,17 +167,30 @@ class ModelClass(nn.Module):
 
                 # computing metrics on batch
                 self.metrics.on_val_batch_end(outputs, labels, batch)
+                # updating roc and prc
+                self.loggers.on_val_batch_end(outputs, labels, batch)
                 # calling callbacks
                 self.callbacks.on_val_batch_end(outputs, labels, batch)
 
                 # updating pbar
-                description = f'Validation: val_loss: {last_loss:.4f}, val_A: {self.metrics.A.v_value_mean :.2f}, ' \
-                              f'val_P: {self.metrics.P.v_value_mean :.2f}, val_R: {self.metrics.R.v_value_mean :.2f}, ' \
-                              f'val_AUC: {self.metrics.AuC.v_value_mean :.2f}'
+                if self.metrics.num_classes != 2:
+                    A = self.metrics.A.v_value_mean
+                    P = self.metrics.P.v_value_mean
+                    R = self.metrics.R.v_value_mean
+                    AUC = self.metrics.AuC.v_value_mean
+                else:
+                    A = self.metrics.A.v_value[1]
+                    P = self.metrics.P.v_value[1]
+                    R = self.metrics.R.v_value[1]
+                    AUC = self.metrics.AuC.v_value[1]
+                description = f'Validation: val_loss: {last_loss:.4f}, val_A: {A :.2f}, ' \
+                              f'val_P: {P :.2f}, val_R: {R :.2f}, val_AUC: {AUC :.2f}'
                 pbar_loader.set_description(description)
 
         # updating metrics dict
         self.metrics.on_val_end(last_loss)
+        # updating loggers (roc, prc)
+        self.loggers.on_val_end()
         # calling callbacks
         self.callbacks.on_val_end(self.metrics.dict, epoch)
 
@@ -181,7 +203,7 @@ class ModelClass(nn.Module):
             torch.cuda.empty_cache()
 
             self.metrics.on_epoch_start()
-            self.loggers.on_epoch_start()
+            self.loggers.on_epoch_start(epoch=epoch, max_epoch=num_epochs)
 
             self.model.train(True)
 
@@ -215,13 +237,12 @@ class ModelClass(nn.Module):
         # calling callbacks (saving last model)
         self.callbacks.on_end()
 
-
     def inference(self, return_preds=False):
         self.model.train(False)
         outputs = []
 
-        model = nn.ModuleList([self.model,
-                               nn.Softmax(1)])
+        model = nn.Sequential(self.model,
+                              nn.Softmax(1))
 
         #resetting metrics for validation
         self.metrics.on_val_start()
@@ -235,6 +256,7 @@ class ModelClass(nn.Module):
                 inputs, labels = data
 
                 inputs = inputs.to(self.device)
+                labels = labels.to(self.device)
 
                 output = model(inputs)
                 pred = np.uint8(np.argmax(output.to('cpu')))
@@ -244,12 +266,21 @@ class ModelClass(nn.Module):
                     torch.cuda.synchronize()
 
                 # computing metrics on batch
-                self.metrics.on_val_batch_end(outputs, labels, batch)
+                self.metrics.on_val_batch_end(output, labels, batch)
 
                 # updating pbar
-                description = f'item: {batch}/{len(self.test_loader)}, A: {self.metrics.A.v_value_mean :.2f}, ' \
-                              f'P: {self.metrics.P.v_value_mean :.2f}, R: {self.metrics.R.v_value_mean :.2f}, ' \
-                              f'AUC: {self.metrics.AuC.v_value_mean :.2f}'
+                if self.metrics.num_classes != 2:
+                    A = self.metrics.A.v_value_mean
+                    P = self.metrics.P.v_value_mean
+                    R = self.metrics.R.v_value_mean
+                    AUC = self.metrics.AuC.v_value_mean
+                else:
+                    A = self.metrics.A.v_value[1]
+                    P = self.metrics.P.v_value[1]
+                    R = self.metrics.R.v_value[1]
+                    AUC = self.metrics.AuC.v_value[1]
+                description = f'item: {batch}/{len(self.test_loader)}, A: {A :.2f}, ' \
+                              f'P: {P :.2f}, R: {R :.2f}, AUC: {AUC :.2f}'
                 pbar_loader.set_description(description)
 
         # print TEST RESULTS

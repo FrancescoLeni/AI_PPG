@@ -74,7 +74,7 @@ def main(args):
     opt = get_optimizer(mod, args.opt, args.lr0, momentum=args.momentum, weight_decay=args.weight_decay)
 
     # initializing loggers
-    logger = Loggers(metrics=metrics, save_path=save_path, opt=opt)
+    logger = Loggers(metrics=metrics, save_path=save_path, opt=opt, device=device)
 
     # lr scheduler
     sched = scheduler(opt, args.sched, args.lrf, epochs)
