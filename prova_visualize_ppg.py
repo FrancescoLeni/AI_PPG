@@ -1,4 +1,5 @@
-from utils.dataloaders import OneSignal
+from utils.dataloaders_prev import OneSignal
+
 from utils.plots import raw_vs_filtered
 from matplotlib import pyplot as plt
 from utils import random_state

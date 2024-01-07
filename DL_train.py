@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from models.DL import ModelClass, check_load_model
-from models.DL.common import Dummy
+from models.DL.common import Dummy, ConvNeXt
 from utils.dataloaders import Crops
 from utils.DL.callbacks import Callbacks, EarlyStopping, Saver
 from utils.DL.loaders import CropsDataset
@@ -40,6 +40,8 @@ def main(args):
         if args.model == "CNN":
             model = Dummy()
             # loading model = bla bla bla
+        if args.model == "ConvNeXt":
+            model = ConvNeXt(num_classes)
         else:
             raise TypeError("Model name not recognised")
     else:
@@ -95,7 +97,7 @@ def main(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Parser")
-    parser.add_argument('--model', type=str, required=True, choices=["CNN"], help='name of model or path to model weights')
+    parser.add_argument('--model', type=str, required=True, choices=["CNN", "ConvNeXt"], help='name of model or path to model weights')
     parser.add_argument('--epochs', type=int, required=True, help='number of epochs')
     parser.add_argument('--batch_size', type=int, required=True, help='batch size')
     parser.add_argument('--mode', type=str, required=True, choices=["binary", "all"], help="whether to use binary or full annotation")
