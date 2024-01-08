@@ -40,7 +40,7 @@ def main(args):
         if args.model == "CNN":
             model = Dummy()
             # loading model = bla bla bla
-        if args.model == "ConvNeXt":
+        elif args.model == "ConvNeXt":
             model = ConvNeXt(num_classes)
         else:
             raise TypeError("Model name not recognised")
@@ -60,7 +60,7 @@ def main(args):
     metrics = Metrics(num_classes=num_classes, device=device, top_k=1, thresh=0.5)
 
     # dataset
-    if args.crops:  # crops dataset
+    if args.crops:  # crops_old dataset
         crops_data = Crops()
         crops_data.split(test_size=0.15)
         test_set = CropsDataset(crops_data.test, mode=mode, stratify=False)
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument('--weighten_loss', type=tuple, default=None, help='whether to weighten the loss and wheight for classes NOTE that len==num_class')
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--crops', action="store_true", help='whether to use Crops dataset')
+    group.add_argument('--crops_old', action="store_true", help='whether to use Crops dataset')
     group.add_argument('--sequences', action="store_true", help='whether to use Sequences dataset')
 
     args = parser.parse_args()

@@ -24,7 +24,7 @@ class CropsDataset(torch.utils.data.Dataset):
         self.S = []
         self.N = []
         for x, y in data:
-            if y == "V" :
+            if y == "V":
                 self.V.append(x)
             elif y == "S":
                 self.S.append(x)
@@ -57,15 +57,15 @@ class CropsDataset(torch.utils.data.Dataset):
         if self.stratify:
             self.shuffle_N()
             N_ = self.N[0:self.half_len]
-            N = [(x, y) for x, y in zip(N_, list(np.zeros(self.half_len)))] # N labelled as 0
+            N = [(x, y) for x, y in zip(N_, list(np.zeros(self.half_len))) if 30 < x.shape[0] < 439]  # N labelled as 0
         else:
-            N = [(x, y) for x, y in zip(self.N, list(np.zeros(self.half_len)))]  # N labelled as 0
+            N = [(x, y) for x, y in zip(self.N, list(np.zeros(self.half_len))) if 30 < x.shape[0] < 439]  # N labelled as 0
 
         if self.mode == "all":
             P = [(x, y) for x, y in zip(self.V, list(np.ones(len(self.V))))] + \
-                [(x, y) for x, y in zip(self.S, list(np.ones(len(self.S)))*2)] # V labelled as 1, S labelled as 2
+                [(x, y) for x, y in zip(self.S, list(np.ones(len(self.S)))*2) if 30 < x.shape[0] < 439]  # V labelled as 1, S labelled as 2
         else: # binary
-            P = [(x, y) for x, y in zip(self.V+self.S, list(np.ones(self.half_len)))] # V and S labelled as 1
+            P = [(x, y) for x, y in zip(self.V+self.S, list(np.ones(self.half_len))) if 30 < x.shape[0] < 439] # V and S labelled as 1
 
         if hasattr(self, 'data'):
             self.data = N+P

@@ -162,7 +162,7 @@ class OneSignal:
         return (crop, lab)
 
 class Crops():
-    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops'), seed=36):
+    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops_old'), seed=36):
         super().__init__()
         names_list = [N,V,S]
         for names in names_list:

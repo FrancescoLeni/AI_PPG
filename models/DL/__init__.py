@@ -70,7 +70,6 @@ class ModelClass(nn.Module):
         last_loss = 0.
 
         # initializing progress bar
-        gpu_used = torch.cuda.memory_allocated() / (1024 ** 3)
         description = 'Training'
         pbar_loader = tqdm(enumerate(self.train_loader), total=len(self.train_loader), desc=description, unit='batch',
                            bar_format=TQDM_BAR_FORMAT)
@@ -78,7 +77,7 @@ class ModelClass(nn.Module):
         # train over batches
         for batch, data in pbar_loader:
             torch.cuda.empty_cache()  # Clear GPU memory
-            gpu_used = torch.cuda.memory_allocated() / (1024 ** 3)
+            gpu_used = torch.cuda.max_memory_allocated() / (1024 ** 3)
             inputs, labs = data
 
             inputs = inputs.to(self.device)

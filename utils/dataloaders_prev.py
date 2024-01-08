@@ -98,11 +98,16 @@ class OneSignal:
 
         crops = []
         labs = []
+        r_crops = []
+        r_labs = []
         while (self.indx < self.indx_max):
-            x, y = self.crop()
+            (x, y), (r_x, r_y) = self.crop()
             crops.append(x)
             labs.append(y)
-        return (crops,labs)
+            r_crops.append(r_x)
+            r_labs.append(r_y)
+
+        return (crops, labs), (r_crops, r_labs)
 
     def normalize(self, data_min, data_max):
         new = self.ppg.reshape(-1, 1)
@@ -146,13 +151,14 @@ class OneSignal:
 
         crop = self.ppg[self.on[self.indx]:self.on[self.indx+1]]
         lab = self.labels[self.indx]
+        raw_crop = self.raw[self.on[self.indx]:self.on[self.indx+1]]
         self.indx+=1
-        return (crop,lab)
+        return (crop, lab), (raw_crop, lab)
 
 
 
 class Crops():
-    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops'), seed=36):
+    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops_old'), seed=36):
         super().__init__()
         names_list = [N,V,S]
         for names in names_list:
