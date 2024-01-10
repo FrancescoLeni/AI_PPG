@@ -23,7 +23,7 @@ class ConvNeXt(nn.Module):
     # ConvNeXt-B: C = (128; 256; 512; 1024), B = (3; 3; 27; 3)
     # ConvNeXt-L: C = (192; 384; 768; 1536), B = (3; 3; 27; 3)
     # ConvNeXt-XL: C = (256; 512; 1024; 2048), B = (3; 3; 27; 3)
-    def __init__(self, num_classes, model_type='T', drop_path=0.):
+    def __init__(self, num_classes, model_type='T', drop_path=0.1):
         super().__init__()
 
         if model_type == 'T':
@@ -41,9 +41,9 @@ class ConvNeXt(nn.Module):
         elif model_type == 'XL':
             self.C = [256, 512, 1024, 2048]
 
-        self.stem = CNeXtStem(1, self.C[0])
+        self.stem = CNeXtStem(1, self.C[0], k=2, s=2)
 
-        self.S = nn.ModuleList([nn.Sequential(*(CNeXtBlock(self.C[i], drop_path=drop_path, layer_scale_init_value=0)
+        self.S = nn.ModuleList([nn.Sequential(*(CNeXtBlock(self.C[i], drop_path=drop_path)
                                                 for _ in range(self.B[i]))) for i in range(4)])
         self.DownSample = nn.ModuleList([CNeXtDownSample(self.C[i], self.C[i+1], 2, 2, 0) for i in range(3)])
 

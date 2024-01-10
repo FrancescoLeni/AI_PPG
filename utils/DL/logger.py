@@ -164,26 +164,18 @@ class ROClogger(BaseCallback):
         self.thresh = None
 
     def on_val_batch_end(self, output=None, target=None, batch=None):
-        if self.run:
-            output = output
-            target = target
-            if not hasattr(self, "preds"):
-                setattr(self, "preds", output)
-                setattr(self, "labs", target)
-            else:
-                self.preds = torch.cat([self.preds, output], dim=0)
-                self.labs = torch.cat([self.labs, target], dim=0)
+        if not hasattr(self, "preds"):
+            setattr(self, "preds", output)
+            setattr(self, "labs", target)
         else:
-            pass
+            self.preds = output
+            self.labs = target
 
     def on_val_end(self, metrics=None, epoch=None):
-        if self.run:
-            self.fpr, self.tpr, self.thresh = self.metric(self.preds, self.labs)
-            self.metric.reset()
-            self.preds = 0
-            self.labs = 0
-        else:
-            pass
+        self.fpr, self.tpr, self.thresh = self.metric(self.preds, self.labs)
+        self.metric.reset()
+        self.preds = 0
+        self.labs = 0
 
     def on_end(self):
         fig, ax = plt.subplots(1, 1, figsize=(20, 11))
@@ -198,10 +190,7 @@ class ROClogger(BaseCallback):
         plt.close()
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
-        if epoch == max_epoch - 1:
-            self.run = True
-        else:
-            pass
+        pass
 
 
 class PRClogger(BaseCallback):
@@ -241,30 +230,22 @@ class PRClogger(BaseCallback):
         self.best_R_th = None
 
     def on_val_batch_end(self, output=None, target=None, batch=None):
-        if self.run:
-            output = output.to("cpu")
-            target = target.to("cpu")
-            if not hasattr(self, "preds"):
-                setattr(self, "preds", output)
-                setattr(self, "labs", target)
-            else:
-                self.preds = torch.cat([self.preds, output], dim=0)
-                self.labs = torch.cat([self.labs, target], dim=0)
+        if not hasattr(self, "preds"):
+            setattr(self, "preds", output)
+            setattr(self, "labs", target)
         else:
-            pass
+            self.preds = output
+            self.labs = target
 
     def on_val_end(self, metrics=None, epoch=None):
-        if self.run:
-            self.P, self.R, self.thresh = self.metric(self.preds, self.labs)
-            self.metric.reset()
-            self.best_P, self.best_P_th = self.metric_best_P(self.preds, self.labs)
-            self.best_R, self.best_R_th = self.metric_best_R(self.preds, self.labs)
-            self.metric_best_P.reset()
-            self.metric_best_R.reset()
-            self.preds = 0
-            self.labs = 0
-        else:
-            pass
+        self.P, self.R, self.thresh = self.metric(self.preds, self.labs)
+        self.metric.reset()
+        self.best_P, self.best_P_th = self.metric_best_P(self.preds, self.labs)
+        self.best_R, self.best_R_th = self.metric_best_R(self.preds, self.labs)
+        self.metric_best_P.reset()
+        self.metric_best_R.reset()
+        self.preds = 0
+        self.labs = 0
 
     def on_end(self):
         fig, ax = plt.subplots(1, 1, figsize=(20, 11))
@@ -283,10 +264,7 @@ class PRClogger(BaseCallback):
         plt.close()
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
-        if epoch == max_epoch-1:
-            self.run = True
-        else:
-            pass
+        pass
 
     def get_text(self):
         sep = '\n'

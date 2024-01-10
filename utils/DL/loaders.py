@@ -24,6 +24,9 @@ class CropsDataset(torch.utils.data.Dataset):
         self.S = []
         self.N = []
         for x, y in data:
+            if len(x.shape) == 1:
+                x = x[:, np.newaxis]
+                x = self.normalize(x)
             if y == "V":
                 self.V.append(x)
             elif y == "S":
@@ -76,6 +79,12 @@ class CropsDataset(torch.utils.data.Dataset):
     # randomly shuffles over-numbered N sample for subsampling
     def shuffle_N(self):
         random.shuffle(self.N)
+
+    def normalize(self, x):
+        x = (x - np.min(x)) / (np.max(x) - np.min(x))
+        return x
+
+
 
 
 

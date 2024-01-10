@@ -162,11 +162,11 @@ class OneSignal:
         return (crop, lab)
 
 class Crops():
-    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops_old'), seed=36):
+    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops'), seed=36):
         super().__init__()
-        names_list = [N,V,S]
+        names_list = [N, V, S]
         for names in names_list:
-            print(f"loading {names}...")
+            print(f"loading {parent/names}...")
             with h5py.File(parent / names, 'r') as file:
                 name = Path(names).stem
                 setattr(self, name, [file[key][:] for key in file.keys() if key != 'labels'])
@@ -182,7 +182,7 @@ class Crops():
                                                                     shuffle=True, stratify=y)
         x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, random_state=self.seed, test_size=len(x_test),
                                                                     shuffle=True, stratify=y_train_val)
-        setattr(self,'train', [(x, y) for x, y in zip(x_train, y_train)])
-        setattr(self,'val', [(x, y) for x, y in zip(x_val, y_val)])
-        setattr(self,'test', [(x, y) for x, y in zip(x_test, y_test)])
+        setattr(self, 'train', [(x, y) for x, y in zip(x_train, y_train)])
+        setattr(self, 'val', [(x, y) for x, y in zip(x_val, y_val)])
+        setattr(self, 'test', [(x, y) for x, y in zip(x_test, y_test)])
 
