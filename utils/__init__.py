@@ -8,7 +8,7 @@ import json
 
 
 # fixes random states to same seed and silenced warnings
-def random_state(seed):
+def random_state(seed=36):
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     os.environ['PYTHONHASHSEED'] = str(seed)
     os.environ['MPLCONFIGDIR'] = os.getcwd() + '/configs/'

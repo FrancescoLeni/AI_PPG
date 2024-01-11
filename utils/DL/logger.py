@@ -168,8 +168,8 @@ class ROClogger(BaseCallback):
             setattr(self, "preds", output)
             setattr(self, "labs", target)
         else:
-            self.preds = output
-            self.labs = target
+            self.preds = torch.cat((self.preds, output), dim=0)
+            self.labs = torch.cat((self.labs, target), dim=0)
 
     def on_val_end(self, metrics=None, epoch=None):
         self.fpr, self.tpr, self.thresh = self.metric(self.preds, self.labs)
@@ -234,8 +234,8 @@ class PRClogger(BaseCallback):
             setattr(self, "preds", output)
             setattr(self, "labs", target)
         else:
-            self.preds = output
-            self.labs = target
+            self.preds = torch.cat((self.preds, output), dim=0)
+            self.labs = torch.cat((self.labs, target), dim=0)
 
     def on_val_end(self, metrics=None, epoch=None):
         self.P, self.R, self.thresh = self.metric(self.preds, self.labs)
@@ -278,6 +278,54 @@ class PRClogger(BaseCallback):
         return sep.join(rows)
 
 
+class ConfusionMatrixLogger(BaseCallback):
+    """
+       :param
+           --num_classes: number of classes
+           --device: device "cpu" or "gpu"
+       """
+
+    def __init__(self, save_path, num_classes=2, device='gpu'):
+        super().__init__()
+
+        if device == "gpu" and torch.cuda.is_available():
+            self.device = 'cuda:0'
+        else:
+            self.device = "cpu"
+
+        self.save_path = save_path
+
+        self.num_classes = num_classes
+
+        self.metric = torchmetrics.classification.ConfusionMatrix(task="multiclass", num_classes=num_classes).to(self.device)
+
+        self.cm = None
+
+    def on_val_batch_end(self, output=None, target=None, batch=None):
+        if not hasattr(self, "preds"):
+            setattr(self, "preds", output)
+            setattr(self, "labs", target)
+        else:
+            self.preds = torch.cat((self.preds, output), dim=0)
+            self.labs = torch.cat((self.labs, target), dim=0)
+
+    def on_val_end(self, metrics=None, epoch=None):
+        self.cm = self.metric(self.preds, self.labs)
+        self.metric.reset()
+        self.preds = 0
+        self.labs = 0
+
+    def on_end(self):
+        fig, ax = plt.subplots(1, 1, figsize=(20, 11))
+        self.metric.plot(val=self.cm, ax=ax)
+        plt.savefig(self.save_path / 'ConfusionMatrix.png', dpi=96)
+        plt.close()
+
+    def on_epoch_start(self, epoch=None, max_epoch=None):
+        pass
+
+
+
 class Loggers(BaseCallback):
     def __init__(self, metrics, opt, save_path, device):
         super().__init__()
@@ -287,6 +335,7 @@ class Loggers(BaseCallback):
         self.figure_saver = SaveFigures(self.logs, save_path)
         self.ROC = ROClogger(save_path, num_classes=metrics.num_classes, device=device)
         self.PRC = PRClogger(save_path, num_classes=metrics.num_classes, device=device)
+        self.cm = ConfusionMatrixLogger(save_path, metrics.num_classes, device)
         self.build_list()
 
     def on_epoch_end(self, epoch=None):

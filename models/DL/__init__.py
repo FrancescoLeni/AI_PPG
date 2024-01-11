@@ -117,7 +117,7 @@ class ModelClass(nn.Module):
                 R = self.metrics.R.t_value_mean
                 AUC = self.metrics.AuC.t_value_mean
             else:
-                A = self.metrics.A.t_value[1]
+                A = self.metrics.A.t_value_mean
                 P = self.metrics.P.t_value[1]
                 R = self.metrics.R.t_value[1]
                 AUC = self.metrics.AuC.t_value[1]
@@ -178,7 +178,7 @@ class ModelClass(nn.Module):
                     R = self.metrics.R.v_value_mean
                     AUC = self.metrics.AuC.v_value_mean
                 else:
-                    A = self.metrics.A.v_value[1]
+                    A = self.metrics.A.v_value_mean
                     P = self.metrics.P.v_value[1]
                     R = self.metrics.R.v_value[1]
                     AUC = self.metrics.AuC.v_value[1]
@@ -274,7 +274,7 @@ class ModelClass(nn.Module):
                     R = self.metrics.R.v_value_mean
                     AUC = self.metrics.AuC.v_value_mean
                 else:
-                    A = self.metrics.A.v_value[1]
+                    A = self.metrics.A.v_value_mean
                     P = self.metrics.P.v_value[1]
                     R = self.metrics.R.v_value[1]
                     AUC = self.metrics.AuC.v_value[1]
@@ -284,6 +284,7 @@ class ModelClass(nn.Module):
 
         # print TEST RESULTS
         # resetting metrics
+        self.loggers.on_val_end()
         self.metrics.on_epoch_end()
 
         if return_preds:

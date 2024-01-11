@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from models.DL import ModelClass, check_load_model
-from models.DL.common import Dummy, ConvNeXt
+from models.DL.common import Dummy, ConvNeXt, ConvNeXtSAM, ResNet1
 from utils.dataloaders import Crops
 from utils.DL.callbacks import Callbacks, EarlyStopping, Saver
 from utils.DL.loaders import CropsDataset
@@ -42,6 +42,10 @@ def main(args):
             # loading model = bla bla bla
         elif args.model == "ConvNeXt":
             model = ConvNeXt(num_classes)
+        elif args.model == "ConvNeXtSAM":
+            model = ConvNeXtSAM(num_classes)
+        elif args.model == "ResNet1":
+            model = ResNet1(num_classes)
         else:
             raise TypeError("Model name not recognised")
     else:
@@ -63,11 +67,17 @@ def main(args):
     if args.crops:  # crops dataset
         crops_data = Crops()
         crops_data.split(test_size=0.15)
-        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False)
-        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True)
-        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, normalization=args.data_norm)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, normalization=args.data_norm)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, normalization=args.data_norm)
     elif args.sequences:  # sequences dataset
         ...
+    elif args.crops_raw:
+        crops_data = Crops(parent='dataset/crops_raw')
+        crops_data.split(test_size=0.15)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=True, normalization=args.data_norm)
     else:
         raise ValueError("data format not recognised")
 
@@ -97,18 +107,19 @@ def main(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Parser")
-    parser.add_argument('--model', type=str, required=True, choices=["CNN", "ConvNeXt"], help='name of model or path to model weights')
+    parser.add_argument('--model', type=str, required=True, choices=["CNN", "ConvNeXt", "ConvNeXtSAM", "ResNet1"], help='name of model or path to model weights')
     parser.add_argument('--epochs', type=int, required=True, help='number of epochs')
     parser.add_argument('--batch_size', type=int, required=True, help='batch size')
     parser.add_argument('--mode', type=str, required=True, choices=["binary", "all"], help="whether to use binary or full annotation")
+    parser.add_argument('--data_norm', type=str, default=None, choices=["min_max", "RobustScaler", "Z-score"], help="type of scaler for data")
     parser.add_argument('--folder', type=str, default="runs", help='name of folder to which saving results')
     parser.add_argument('--name', type=str, default="exp", help='name of experiment folder inside folder')
-    parser.add_argument('--opt', type=str, default="SGD", choices=["SGD", "Adam", "AdamW"], help='name of optimizer to use')
+    parser.add_argument('--opt', type=str, default="AdamW", choices=["SGD", "Adam", "AdamW"], help='name of optimizer to use')
     parser.add_argument('--sched', type=str, default=None, choices=["linear", "cos_lr"], help="name of the lr scheduler")
-    parser.add_argument('--lr0', type=float, default=0.002, help='initial learning rate')
+    parser.add_argument('--lr0', type=float, default=0.0004, help='initial learning rate')
     parser.add_argument('--lrf', type=float, default=0.001, help='final learning rate (multiplicative factor)')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum value (SGD) beta1 (Adam, AdamW)')
-    parser.add_argument('--weight_decay', type=float, default=0.0005, help='weight decay value')
+    parser.add_argument('--weight_decay', type=float, default=0.05, help='weight decay value')
     parser.add_argument('--lab_smooth', type=float, default=0, help='label smoothing value')
     parser.add_argument('--patience', type=int, default=30, help='number of epoch to wait for early stopping')
     parser.add_argument('--device', type=str, default="cpu", choices=["cpu", "gpu"], help='device to which loading the model')
@@ -118,6 +129,7 @@ if __name__ == "__main__":
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--crops', action="store_true", help='whether to use Crops dataset')
+    group.add_argument('--crops_raw', action="store_true", help='whether to use Crops_raw dataset (extracted from raw signal)')
     group.add_argument('--sequences', action="store_true", help='whether to use Sequences dataset')
 
     args = parser.parse_args()

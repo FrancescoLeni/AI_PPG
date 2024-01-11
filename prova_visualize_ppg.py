@@ -1,4 +1,4 @@
-from utils.dataloaders_prev import OneSignal
+from utils.dataloaders import OneSignal
 
 from utils.plots import raw_vs_filtered
 from matplotlib import pyplot as plt
@@ -9,6 +9,8 @@ random_state(36)
 signal = OneSignal('S109_250.mat')
 
 signal.filter(fL=0.5, fH=4.3, order=4)
+
+signal.align_onsets()
 # 445000
 raw_vs_filtered(signal.raw, signal.ppg, signal.on, signal.peaks, signal.labels, dt=320050) # dt indicates the displacement of the signal
 

@@ -53,13 +53,14 @@ class LayerScale(nn.Module):
         x = x.permute(0, 2, 1)  # (N, L, C) -> (N, C, L)
         return x
 
+
 class SelfAttentionModule(nn.Module):
-    def __init__(self, c_in, L):
+    def __init__(self, c_in, k=9, s=1, p=4):
         super().__init__()
         self.conv = nn.Conv1d(c_in, 1, 1, 1)
-        self.spatial = nn.Sequential(nn.Linear(L, L // 2),
+        self.spatial = nn.Sequential(nn.Conv1d(1, 32, k, s, p),
                                      nn.ReLU(),
-                                     nn.Linear(L // 2, L)
+                                     nn.Conv1d(32, 1, k, s, p)
                                      )
         self.act = nn.Sigmoid()
 
@@ -68,6 +69,7 @@ class SelfAttentionModule(nn.Module):
         x_ = self.conv(x)
         # (bs, 1, L)
         x_ = self.spatial(x_)
+        # (bs, 1, L)
         scale = self.act(x_)
 
         return x * scale

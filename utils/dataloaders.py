@@ -155,16 +155,23 @@ class OneSignal:
         
         self.on = np.array(filtered_onsets, dtype=int)
     
-    def crop(self):
+    def crop(self, raw=False):
         crop = self.ppg[self.on[self.indx]:self.on[self.indx+1]]
         lab = self.labels[self.indx]
-        self.indx+=1
-        return (crop, lab)
+        if not raw:
+            self.indx += 1
+            return crop, lab
+        else:
+            c_raw = self.raw[self.on[self.indx]:self.on[self.indx+1]]
+            l_raw = self.labels[self.indx]
+            self.indx += 1
+            return (crop, lab), (c_raw, l_raw)
 
 class Crops():
-    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent=Path('dataset/crops'), seed=36):
+    def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent='dataset/crops', seed=36):
         super().__init__()
         names_list = [N, V, S]
+        parent = Path(parent)
         for names in names_list:
             print(f"loading {parent/names}...")
             with h5py.File(parent / names, 'r') as file:

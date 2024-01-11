@@ -59,14 +59,26 @@ class CNeXtDownSample(nn.Module):
         return x
 
 
-class CNeXtSAMDownSample(nn.Module):   # ho aggiunto la GELU
-    def __init__(self, c1, c2, k, s, p):
+class ConvNormAct(nn.Module):
+    def __init__(self, c1, c2, k, s, p, act=nn.ReLU()):
         super().__init__()
-        self.layer = nn.Conv2d(c1, c2, k, s, p)
-        self.SA = cbam.SpatialGate1(c2)
-        #self.act = nn.GELU()
-    def forward(self,x):
-        x = self.layer(x)
-        x = self.SA(x)
-        #x = self.act(x)
-        return x
+        self.act = act
+        self.norm = nn.BatchNorm1d(c2)
+        self.conv = nn.Conv1d(c1, c2, k, s, p)
+
+    def forward(self, x):
+        return self.act(self.norm(self.conv(x)))
+
+
+class ResBlock(nn.Module):
+    def __init__(self, c1, k=5, s=1, p=2):
+        super().__init__()
+
+        self.m = nn.Sequential(ConvNormAct(c1, c1//2, 1, 1, 0),
+                               ConvNormAct(c1//2, c1//2, k, s, p),
+                               ConvNormAct(c1//2, c1, 1, 1, 0)
+                               )
+
+    def forward(self, x):
+        return self.m(x) + x
+
