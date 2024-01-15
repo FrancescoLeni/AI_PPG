@@ -74,3 +74,77 @@ class SelfAttentionModule(nn.Module):
 
         return x * scale
 
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=512):
+        super().__init__()
+        self.encoding = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(torch.log(torch.tensor(10000.0)) / d_model))
+        self.encoding[:, 0::2] = torch.sin(position * div_term)
+        self.encoding[:, 1::2] = torch.cos(position * div_term)
+        self.encoding = self.encoding.unsqueeze(0)
+
+    def forward(self, x):
+        enc = self.encoding[:, :x.size(1)].detach().to(x.device)
+        #print(x.shape, enc.shape)
+        return x + enc
+
+
+# from swin transformers (adapted)
+class PatchMerging(nn.Module):
+    """ Patch Merging Layer.
+
+    Args:
+        dim (int): Number of input channels.
+        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+    """
+
+    def __init__(self, dim, norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.dim = dim
+        self.reduction = nn.Linear(2 * dim, 2 * dim, bias=False)
+        self.norm = norm_layer(2 * dim)
+
+    def forward(self, x):
+        """
+        x: B, L, C
+        """
+        assert x.shape[1] % 2 == 0, f"x size ({x.shape[1]}) is not even."
+
+        x0 = x[:, 0::2, :]  # BS H/2 C
+        x1 = x[:, 1::2, :]  # BS H/2 C
+
+        x = torch.cat([x0, x1], -1)  # BS H/2 2*C
+
+        x = self.norm(x)
+        x = self.reduction(x)
+
+        return x
+
+
+class PatchExpanding(nn.Module):
+        """ Patch Expanding Layer.
+
+        Args:
+            dim (int): Number of input channels.
+            norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+        """
+
+        def __init__(self, dim, norm_layer=nn.LayerNorm):
+            super().__init__()
+            self.dim = dim
+            self.reduction = nn.Linear(dim//2, dim//2, bias=False)
+            self.norm = norm_layer(dim//2)
+
+        def forward(self, x):
+            """
+            x: B, L, C
+            """
+
+            x = x.view(-1, x.shape[1]*2, x.shape[-1]//2)  # BS H*2 C/2
+
+            x = self.norm(x)
+            x = self.reduction(x)
+
+            return x

@@ -7,7 +7,6 @@ from preprocessing import Fiducials, Biomarkers
 import pyPPG.biomarkers as BM
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from pathlib import Path
 from dotmap import DotMap
 import numpy as np
@@ -167,7 +166,7 @@ class OneSignal:
             self.indx += 1
             return (crop, lab), (c_raw, l_raw)
 
-class Crops():
+class Crops:
     def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent='dataset/crops', seed=36):
         super().__init__()
         names_list = [N, V, S]
@@ -192,4 +191,67 @@ class Crops():
         setattr(self, 'train', [(x, y) for x, y in zip(x_train, y_train)])
         setattr(self, 'val', [(x, y) for x, y in zip(x_val, y_val)])
         setattr(self, 'test', [(x, y) for x, y in zip(x_test, y_test)])
+
+
+class CroppedSeq:
+    def __init__(self, parent='dataset/crops_raw/patients', seed=36):
+        self.parent = Path(parent)
+        self.sequences = {}
+        self.train = []
+        self.val = []
+        self.test = []
+        self.build()
+        self.split()
+
+    def build(self):
+        print(f"loading signals...")
+        for names in os.listdir(self.parent):
+            with h5py.File(self.parent / names, 'r') as file:
+                name = Path(names).stem
+                sig_labs = list(file['labels'][:].astype('U'))
+                sig_crops = [(file[key][:], lab) for key, lab in zip(file.keys(), sig_labs) if key != 'labels']
+                self.sequences[name] = sig_crops
+
+    def split(self):
+        """
+            numbers of sequences:
+                --more_9 26 (23,3,0)
+                --less_9 65 (46,8,11)
+                --N 12 (3,5,4)
+                --tot 103
+                --Train 72
+                --val 16
+                --test 15
+        """
+        m9 = [Path(sig).stem for sig in os.listdir('dataset/more_9')]
+        l9 = [Path(sig).stem for sig in os.listdir('dataset/less_9')]
+        N = [Path(sig).stem for sig in os.listdir('dataset/only_N')]
+
+        more_9_train = [m9[i] for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25]]
+        more_9_val = [m9[i] for i in [12, 14, 20]]
+
+        less_9_train = [l9[i] for i in [0, 1, 3, 4, 5, 6, 7, 9, 10, 11, 15, 16, 17, 18, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 34, 35,
+                                        36, 37, 40, 41, 42, 43, 44, 45, 46, 49, 50, 51, 52, 53, 55, 56, 57, 58, 59, 63]]
+        less_9_val = [l9[i] for i in [33, 38, 39, 12, 13, 20, 28, 61]]
+        less_9_test = [l9[i] for i in [2, 8, 14, 47, 48, 19, 21, 54, 60, 62, 64]]
+
+        N_train = [N[i] for i in [0, 11, 5]]
+        N_val = [N[i] for i in [1, 2, 8, 7, 6]]
+        N_test = [N[i] for i in [3, 4, 9, 10]]
+
+        train = N_train + more_9_train + less_9_train
+        val = N_val + more_9_val + less_9_val
+        test = N_test + less_9_test
+
+        random.shuffle(train)
+        random.shuffle(val)
+        random.shuffle(test)
+
+        # self.train = [self.sequences[key] for key in train]
+        # self.val = [self.sequences[key] for key in val]
+        # self.test = [self.sequences[key] for key in test]
+
+        self.train = [self.sequences[key] for key in m9]
+        self.val = [self.sequences[key] for key in less_9_val]
+        self.test = [self.sequences[key] for key in test]
 

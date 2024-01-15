@@ -17,7 +17,7 @@ TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}'
 
 class ModelClass(nn.Module):
     def __init__(self, model, loaders, device='cpu', callbacks=None, loss_fn=None, optimizer=None, sched=None,
-                 metrics=None, loggers=None, AMP=True):
+                 metrics=None, loggers=None, AMP=True, freeze=None):
         super().__init__()
         """
         :param
@@ -25,7 +25,12 @@ class ModelClass(nn.Module):
             --loaders: tuple with the Torch data_loaders like (train,val,test)
             --device: str for gpu or cpu
             --metrics: metrics instance for computing metrics callbacks
+            --loggers: loggers instance
+            --AMP: Automatic Mixed Precision 
+            --freeze: list containing names of layers to freeze
         """
+
+        self.freeze = freeze
 
         if isinstance(model, nn.Module):
             self.model = model
@@ -204,18 +209,21 @@ class ModelClass(nn.Module):
             self.metrics.on_epoch_start()
             self.loggers.on_epoch_start(epoch=epoch, max_epoch=num_epochs)
 
-            self.model.train(True)
+            # self.model.train(True)
+            self.check_freeze()  # freezing specific layers (if needed)
 
-            # 1 epoch train
-            self.train_one_epoch(epoch, num_epochs)
+            # for name, param in self.model.named_parameters():
+            #     print(name, param.requires_grad)
+
             # reshuffle for subsampling
             self.train_loader.dataset.build()
-
-            # validation
-            self.val_loop(epoch)
+            # 1 epoch train
+            self.train_one_epoch(epoch, num_epochs)
 
             # reshuffle for subsampling
             self.val_loader.dataset.build()
+            # validation
+            self.val_loop(epoch)
 
             # logging results
             self.loggers.on_epoch_end()
@@ -290,14 +298,35 @@ class ModelClass(nn.Module):
         if return_preds:
             return outputs
 
+    def check_freeze(self):
+        if self.freeze:
+            for name, param in self.model.named_parameters():
+                if any(layer_name in name for layer_name in self.freeze):
+                    param.requires_grad = False
+                else:
+                    param.requires_grad = True
+        else:
+            self.model.train(True)
 
-def check_load_model(model):
-    if isinstance(model, nn.Module):
-        return model
-    elif isinstance(model, str) and Path(model).suffix == ".pt" or ".pth":
-        return torch.load(model)
+
+def check_load_model(model, backbone_weights):
+    if not backbone_weights:
+        if isinstance(model, nn.Module):
+            return model
+        elif isinstance(model, str) and Path(model).suffix == ".pt" or ".pth":
+            return torch.load(model)
+        else:
+            raise TypeError("model not recognised")
     else:
-        raise TypeError("model not recognised")
+        # I'm loading only the weights from the backbone
+
+        assert isinstance(model, nn.Module)  # check that the model is something to load weights to
+
+        old = torch.load(backbone_weights)
+        filtered_state_dict = {k: old.state_dict()[k] for k in old.state_dict() if k in model.state_dict()}
+        model.load_state_dict(filtered_state_dict, strict=False)
+
+        return model
 
 
 

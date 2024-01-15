@@ -164,7 +164,7 @@ class ROClogger(BaseCallback):
         self.thresh = None
 
     def on_val_batch_end(self, output=None, target=None, batch=None):
-        if not hasattr(self, "preds"):
+        if batch == 0:
             setattr(self, "preds", output)
             setattr(self, "labs", target)
         else:
@@ -230,7 +230,7 @@ class PRClogger(BaseCallback):
         self.best_R_th = None
 
     def on_val_batch_end(self, output=None, target=None, batch=None):
-        if not hasattr(self, "preds"):
+        if batch == 0:
             setattr(self, "preds", output)
             setattr(self, "labs", target)
         else:
@@ -302,7 +302,7 @@ class ConfusionMatrixLogger(BaseCallback):
         self.cm = None
 
     def on_val_batch_end(self, output=None, target=None, batch=None):
-        if not hasattr(self, "preds"):
+        if batch == 0:
             setattr(self, "preds", output)
             setattr(self, "labs", target)
         else:
