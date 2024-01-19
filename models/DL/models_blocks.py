@@ -60,10 +60,10 @@ class CNeXtDownSample(nn.Module):
 
 
 class ConvNormAct(nn.Module):
-    def __init__(self, c1, c2, k, s, p, act=nn.ReLU()):
+    def __init__(self, c1, c2, k, s, p, act=nn.ReLU(), norm=nn.BatchNorm1d):
         super().__init__()
         self.act = act
-        self.norm = nn.BatchNorm1d(c2)
+        self.norm = norm(c2)
         self.conv = nn.Conv1d(c1, c2, k, s, p)
 
     def forward(self, x):
@@ -71,12 +71,12 @@ class ConvNormAct(nn.Module):
 
 
 class ResBlock(nn.Module):
-    def __init__(self, c1, k=5, s=1, p=2):
+    def __init__(self, c1, k=5, s=1, p=2, act=nn.ReLU(), norm=nn.BatchNorm1d):
         super().__init__()
 
-        self.m = nn.Sequential(ConvNormAct(c1, c1//2, 1, 1, 0),
-                               ConvNormAct(c1//2, c1//2, k, s, p),
-                               ConvNormAct(c1//2, c1, 1, 1, 0)
+        self.m = nn.Sequential(ConvNormAct(c1, c1//2, 1, 1, 0, act, norm),
+                               ConvNormAct(c1//2, c1//2, k, s, p, act, norm),
+                               ConvNormAct(c1//2, c1, 1, 1, 0, act, norm)
                                )
 
     def forward(self, x):
@@ -84,14 +84,14 @@ class ResBlock(nn.Module):
 
 
 class ResBlockDP(nn.Module):
-    def __init__(self, c1, k=5, s=1, p=2, dp=0.1):
+    def __init__(self, c1, k=5, s=1, p=2, dp=0.1, act=nn.ReLU(), norm=nn.BatchNorm1d):
         super().__init__()
 
         self.dp = nn.Dropout1d(dp)
         self.m = nn.Sequential(self.dp,
-                               ConvNormAct(c1, c1//2, 1, 1, 0),
-                               ConvNormAct(c1//2, c1//2, k, s, p),
-                               ConvNormAct(c1//2, c1, 1, 1, 0)
+                               ConvNormAct(c1, c1//2, 1, 1, 0, act, norm),
+                               ConvNormAct(c1//2, c1//2, k, s, p, act, norm),
+                               ConvNormAct(c1//2, c1, 1, 1, 0, act, norm)
                                )
 
     def forward(self, x):
@@ -140,4 +140,48 @@ class TransformerBlock(nn.Module):
         return x
 
 
+#  Stolen from YOLO repo
+class SPPF(nn.Module):
+    # Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher
+    def __init__(self, c1, c2, k=5, act=nn.ReLU(), norm=nn.BatchNorm1d):  # equivalent to SPP(k=(5, 9, 13))
+        super().__init__()
+        c_ = c1 // 2  # hidden channels
+        self.cv1 = ConvNormAct(c1, c_, 1, 1, 0, act, norm)
+        self.cv2 = ConvNormAct(c_ * 4, c2, 1, 1, 0, act, norm)
+        self.m = nn.MaxPool1d(kernel_size=k, stride=1, padding=k // 2)
 
+    def forward(self, x):
+
+        x = self.cv1(x)
+        # with warnings.catch_warnings():
+        #     warnings.simplefilter('ignore')  # suppress torch 1.9.0 max_pool2d() warning
+        y1 = self.m(x)
+        y2 = self.m(y1)
+        return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
+
+
+class C3(nn.Module):
+    # CSP Bottleneck with 3 convolutions
+    def __init__(self, c1, c2, n, shortcut=True, e=0.5, act=nn.SiLU(), norm=nn.BatchNorm1d):  # ch_in, ch_out, number, shortcut, groups, expansion
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = ConvNormAct(c1, c_, 1, 1, 0, act=act, norm=norm)
+        self.cv2 = ConvNormAct(c1, c_, 1, 1, 0, act=act, norm=norm)
+        self.cv3 = ConvNormAct(2 * c_, c2, 1, 1, 0, act=act, norm=norm)  # optional act=FReLU(c2)
+        self.m = nn.Sequential(*(Bottleneck(c_, c_, shortcut, e=1.0, act=act, norm=norm) for _ in range(n)))
+
+    def forward(self, x):
+        return self.cv3(torch.cat((self.m(self.cv1(x)), self.cv2(x)), 1))
+
+
+class Bottleneck(nn.Module):
+    # Standard bottleneck
+    def __init__(self, c1, c2, shortcut=True, e=0.5, act=nn.SiLU(), norm=nn.BatchNorm1d):  # ch_in, ch_out, shortcut, groups, expansion
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = ConvNormAct(c1, c_, 1, 1, 0, act=act, norm=norm)
+        self.cv2 = ConvNormAct(c_, c2, 3, 1, 1, act=act, norm=norm)
+        self.add = shortcut and c1 == c2
+
+    def forward(self, x):
+        return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))

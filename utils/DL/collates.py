@@ -10,9 +10,13 @@ def padding_x(batch):
     # Pad sequences if needed (inputs L-C)
     x_padded = pad_sequence(x, batch_first=True, padding_value=0)
 
-    y = torch.LongTensor(y)
+    if isinstance(y, tuple) and y[0].shape[0] >= 2:
+        y = torch.stack(y, dim=0)
+        # y = torch.concat((y[0].unsqueeze(0), y[1].unsqueeze(0)), dim=0)
+    else:
+        y = torch.LongTensor(y)
 
-    return x_padded.permute(0,2,1), y
+    return x_padded.permute(0, 2, 1), y
 
 
 def keep_unchanged(batch):

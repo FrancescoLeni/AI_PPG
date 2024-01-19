@@ -15,9 +15,10 @@ import scipy.io
 import random
 import os
 import h5py
+import json
 
 class OneSignal:
-    def __init__(self, data_name = None):
+    def __init__(self, data_name=None):
         """
         :param
             --data_name: filename like 'S001_128.mat' or tuple (data_path,label_path,peaks_path)
@@ -163,31 +164,97 @@ class OneSignal:
         else:
             c_raw = self.raw[self.on[self.indx]:self.on[self.indx+1]]
             l_raw = self.labels[self.indx]
+            c_j = self.jpg[self.on[self.indx]:self.on[self.indx+1]]
+            c_v = self.vpg[self.on[self.indx]:self.on[self.indx+1]]
+            c_a = self.apg[self.on[self.indx]:self.on[self.indx+1]]
             self.indx += 1
-            return (crop, lab), (c_raw, l_raw)
+            return (crop, lab), (c_raw, l_raw), (c_j, c_v, c_a)
+
 
 class Crops:
     def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent='dataset/crops', seed=36):
         super().__init__()
-        names_list = [N, V, S]
-        parent = Path(parent)
-        for names in names_list:
-            print(f"loading {parent/names}...")
-            with h5py.File(parent / names, 'r') as file:
+        self.names_list = [N, V, S]
+        self.parent = Path(parent)
+
+        self.N_crops = []
+        self.V_crops = []
+        self.S_crops = []
+        self.N_labels = []
+        self.V_labels = []
+        self.S_labels = []
+
+        # populating the above
+        for names in self.names_list:
+            print(f"loading {self.parent/names}...")
+            with h5py.File(self.parent / names, 'r') as file:
                 name = Path(names).stem
                 setattr(self, name, [file[key][:] for key in file.keys() if key != 'labels'])
                 setattr(self, f"{name[0]}_labels", list(file['labels'][:].astype('U')))
 
+        self.j = {'N': [], 'V': [], 'S': []}
+        self.v = {'N': [], 'V': [], 'S': []}
+        self.a = {'N': [], 'V': [], 'S': []}
+        self.load_derivatives()  # populating above dict
+
+        self.raw = {'N': [], 'V': [], 'S': []}
+        self.load_raw()  # populating above
+
+        # compressing everything to handle splitting
+        self.N = [(x, r, j, a, v) for x, r, j, a, v in zip(self.N_crops, self.raw['N'], self.j['N'], self.a['N'], self.v['N'])]
+        self.V = [(x, r, j, a, v) for x, r, j, a, v in zip(self.V_crops, self.raw['V'], self.j['V'], self.a['V'], self.v['V'])]
+        self.S = [(x, r, j, a, v) for x, r, j, a, v in zip(self.S_crops, self.raw['S'], self.j['S'], self.a['S'], self.v['S'])]
+
+        # populated when split
+        self.train = None
+        self.val = None
+        self.test = None
+
         self.seed = seed
 
-    def split(self, test_size=.15):
-        x = self.V_crops + self.S_crops + self.N_crops
-        y = self.V_labels + self.S_labels + self.N_labels
+    def load_raw(self, p='dataset/crops_raw'):
+        p = Path(p)
+        for names in self.names_list:
+            print(f"loading {p / names}...")
+            with h5py.File(p / names, 'r') as file:
+                name = Path(names).stem.split('_')[0]
+                self.raw[name] = [file[key][:] for key in file.keys() if key != 'labels']
+
+    def load_derivatives(self, pv='dataset/crops_vpg', pa='dataset/crops_apg', pj='dataset/crops_jpg'):
+        pv = Path(pv)
+        pa = Path(pa)
+        pj = Path(pj)
+        for names in self.names_list:
+            print(f"loading {pv/names}...")
+            with h5py.File(pv / names, 'r') as file:
+                name = Path(names).stem.split('_')[0]
+                self.v[name] = [file[key][:] for key in file.keys() if key != 'labels']
+            print(f"loading {pa/names}...")
+            with h5py.File(pa / names, 'r') as file:
+                name = Path(names).stem.split('_')[0]
+                self.a[name] = [file[key][:] for key in file.keys() if key != 'labels']
+            print(f"loading {pj / names}...")
+            with h5py.File(pj / names, 'r') as file:
+                name = Path(names).stem.split('_')[0]
+                self.j[name] = [file[key][:] for key in file.keys() if key != 'labels']
+
+    def split(self, test_size=.15, everything=False):
+
+        # to get ONLY signal crops, either raw or filtered
+        if not everything:
+            x = self.V_crops + self.S_crops + self.N_crops
+            y = self.V_labels + self.S_labels + self.N_labels
+
+        # to get ALSO derivatives
+        else:
+            x = self.V + self.S + self.N
+            y = self.V_labels + self.S_labels + self.N_labels
 
         x_train_val, x_test, y_train_val, y_test = train_test_split(x, y, random_state=self.seed, test_size=test_size,
                                                                     shuffle=True, stratify=y)
-        x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, random_state=self.seed, test_size=len(x_test),
-                                                                    shuffle=True, stratify=y_train_val)
+        x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, random_state=self.seed,
+                                                          test_size=len(x_test),
+                                                          shuffle=True, stratify=y_train_val)
         setattr(self, 'train', [(x, y) for x, y in zip(x_train, y_train)])
         setattr(self, 'val', [(x, y) for x, y in zip(x_val, y_val)])
         setattr(self, 'test', [(x, y) for x, y in zip(x_test, y_test)])
@@ -255,3 +322,82 @@ class CroppedSeq:
         self.val = [self.sequences[key] for key in less_9_val]
         self.test = [self.sequences[key] for key in test]
 
+
+class Sequences:
+    def __init__(self, raw=False):
+
+        self.raw = raw
+
+        self.on = self.load_on(data_path='dataset/onsets.json')  # dict 1D array
+
+        self.data = {}
+        self.build()  # filling self.data with signals
+
+        self.train = []
+        self.val = []
+        self.test = []
+
+        self.split()  # filling .train .val .test
+
+    def load_on(self, data_path='dataset/onsets.json'):
+        with open('dataset/onsets.json', 'r') as json_file:
+            loaded = json.load(json_file)
+        return loaded
+
+    def build(self):
+        print('loading sequences...')
+        for file_name in os.listdir('dataset/data'):
+            name = Path(file_name).stem
+            one = OneSignal(file_name)
+            if self.raw:
+                data = one.raw
+            else:
+                data = np.load(f'dataset/filtered/{name}.npy')
+
+            apg = np.load(f'dataset/apg/{name}.npy')
+            vpg = np.load(f'dataset/vpg/{name}.npy')
+            jpg = np.load(f'dataset/jpg/{name}.npy')
+
+            self.data[name] = (data, one.peaks, one.labels[:, np.newaxis], self.on[name], apg, vpg, jpg)
+
+    def split(self):
+        """
+            numbers of sequences:
+                    --more_9 26 (23,3,0)
+                    --less_9 65 (49,7,9)
+                    --N 12 (0,6,6)
+                    --tot 103
+                    --Train 72
+                    --val 16
+                    --test 15
+        """
+        m9 = [Path(sig).stem for sig in os.listdir('dataset/more_9')]
+        l9 = [Path(sig).stem for sig in os.listdir('dataset/less_9')]
+        N = [Path(sig).stem for sig in os.listdir('dataset/only_N')]
+
+        more_9_train = [m9[i] for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25]]
+        more_9_val = [m9[i] for i in [12, 14, 20]]
+
+        less_9_train = [l9[i] for i in [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 34, 35,
+                                        36, 37, 40, 41, 42, 43, 44, 45, 46, 49, 50, 51, 52, 53, 55, 56, 57, 58, 59, 61, 63]]
+        less_9_val = [l9[i] for i in [33, 38, 39, 12, 13, 20, 28]]
+        less_9_test = [l9[i] for i in [8, 14, 47, 48, 21, 54, 60, 62, 64]]
+
+        N_val = [N[i] for i in [0, 1, 2, 8, 7, 6]]
+        N_test = [N[i] for i in [3, 4, 5, 9, 10, 11]]
+
+        train = more_9_train + less_9_train
+        val = N_val + more_9_val + less_9_val
+        test = N_test + less_9_test
+
+        # random.shuffle(train)
+        # random.shuffle(val)
+        # random.shuffle(test)
+
+        self.train = [self.data[key] for key in train]
+        self.val = [self.data[key] for key in val]
+        self.test = [self.data[key] for key in test]
+
+        # self.train = [self.data[key] for key in m9]
+        # self.val = [self.data[key] for key in less_9_val]
+        # self.test = [self.data[key] for key in test]

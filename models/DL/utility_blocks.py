@@ -75,8 +75,34 @@ class SelfAttentionModule(nn.Module):
         return x * scale
 
 
+#  computes attention over features along all timesteps
+class SelfAttentionModuleFC(nn.Module):
+    def __init__(self, c_in, d_lin, return_map=False):
+        super().__init__()
+        self.return_map = return_map
+        self.conv = nn.Conv1d(c_in, 1, 1, 1)
+        self.spatial = nn.Sequential(nn.Linear(d_lin, d_lin//4),
+                                     nn.ReLU(),
+                                     nn.Linear(d_lin//4, d_lin)
+                                     )
+        self.act = nn.Sigmoid()
+
+    def forward(self, x):
+        # (bs, L, C)
+        x_ = self.conv(x)
+        # (bs, 1, C)
+        x_ = self.spatial(x_)
+        # (bs, 1, C)
+        scale = self.act(x_)
+
+        if not self.return_map:
+            return x * scale
+        else:
+            return x * scale, scale
+
+
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=512):
+    def __init__(self, d_model, max_len=1000):
         super().__init__()
         self.encoding = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
@@ -148,3 +174,4 @@ class PatchExpanding(nn.Module):
             x = self.reduction(x)
 
             return x
+

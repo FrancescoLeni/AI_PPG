@@ -3,14 +3,16 @@ import torch
 import torch.nn as nn
 
 from models.DL import ModelClass, check_load_model
-from models.DL.common import Dummy, ConvNeXt, ConvNeXtSAM, ResNet1, ResNet2, ResNetTransform, ResNetTransform2, ResNetTransformerAtt
-from utils.dataloaders import Crops, CroppedSeq
+from models.DL.common import Dummy, ConvNeXt, ConvNeXtSAM, ResNet1, ResNet2, ResNetTransform, ResNetTransform2, \
+                             ResNetTransformerAtt, TransformerEncDec, ResUnet, ResUnetAtt, DarkNetCSP, ResUnetAtt2, \
+                             DarkNetCSPBoth, LearnableInitBiLSTM
+from utils.dataloaders import Crops, CroppedSeq, Sequences
 from utils.DL.callbacks import Callbacks, EarlyStopping, Saver
-from utils.DL.loaders import CropsDataset, CroppedSeqDataset
+from utils.DL.loaders import CropsDataset, CroppedSeqDataset, WindowedSeq
 from utils.DL.optimizers import get_optimizer, scheduler
 from utils.DL.collates import padding_x, keep_unchanged
 from utils.DL.metrics import Metrics
-from utils.DL.logger import Loggers
+from utils.DL.logger import Loggers, LoggersBoth
 from utils import random_state, increment_path, json_from_parser
 
 # setting all random states
@@ -32,10 +34,78 @@ def main(args):
     else:
         num_classes = 3
 
+    bi_head_f = True
+
     # saving inputs
     json_from_parser(args, save_path)
 
-    # checking whether you parsed weights or model name
+    # dataset
+    if args.crops:  # crops dataset
+        crops_data = Crops()
+        crops_data.split(test_size=0.15)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, normalization=args.data_norm,
+                                sig_mode='single', bi_head=bi_head_f)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, normalization=args.data_norm,
+                               sig_mode='single', bi_head=bi_head_f)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, normalization=args.data_norm,
+                                 sig_mode='single', bi_head=bi_head_f)
+        n_in = 1
+    elif args.crops_raw:
+        crops_data = Crops(parent='dataset/crops_raw')
+        crops_data.split(test_size=0.15)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm,
+                                sig_mode='single', bi_head=bi_head_f)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                               sig_mode='single', bi_head=bi_head_f)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                                 sig_mode='single', bi_head=bi_head_f)
+        n_in = 1
+    elif args.crops_der:
+        crops_data = Crops()  # filtered
+        crops_data.split(test_size=0.15, everything=True)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm,
+                                sig_mode='derivatives', bi_head=bi_head_f)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                               sig_mode='derivatives', bi_head=bi_head_f)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                                 sig_mode='derivatives', bi_head=bi_head_f)
+        n_in = 4
+    elif args.crops_all:
+        crops_data = Crops()  # filtered
+        crops_data.split(test_size=0.15, everything=True)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm,
+                                sig_mode='all', bi_head=bi_head_f)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                               sig_mode='all', bi_head=bi_head_f)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                                 sig_mode='all', bi_head=bi_head_f)
+        n_in = 5
+    elif args.cropped_seq:
+        data = CroppedSeq(parent='dataset/crops/patients')  # loaded and split
+        test_set = CroppedSeqDataset(data.test, mini_batch=256, mode=mode, normalization=args.data_norm)
+        val_set = CroppedSeqDataset(data.val, mini_batch=256, mode=mode, normalization=args.data_norm)
+        train_set = CroppedSeqDataset(data.train, mini_batch=256, mode=mode, normalization=args.data_norm)
+        n_in = 1
+    elif args.cropped_seq_raw:
+        data = CroppedSeq()  # loaded and split
+        test_set = CroppedSeqDataset(data.test, mini_batch=256, mode=mode, raw=True, normalization=args.data_norm)
+        val_set = CroppedSeqDataset(data.val, mini_batch=256, mode=mode, raw=True, normalization=args.data_norm)
+        train_set = CroppedSeqDataset(data.train, mini_batch=256, mode=mode, raw=True, normalization=args.data_norm)
+        n_in = 1
+    elif args.windowed_seq:
+        data = Sequences()
+        test_set = WindowedSeq(data.test, mode=mode, raw=False, normalization=args.data_norm)
+        val_set = WindowedSeq(data.val, mode=mode, raw=False, normalization=args.data_norm)
+        train_set = WindowedSeq(data.train, mode=mode, raw=False, normalization=args.data_norm)
+        n_in = 1
+    elif args.windowed_seq_raw:
+        data = Sequences(raw=True)
+        test_set = WindowedSeq(data.test, mode=mode, raw=True, normalization=args.data_norm)
+        val_set = WindowedSeq(data.val, mode=mode, raw=True, normalization=args.data_norm)
+        train_set = WindowedSeq(data.train, mode=mode, raw=True, normalization=args.data_norm)
+        n_in = 1
+    else:
+        raise ValueError("data format not recognised")    # checking whether you parsed weights or model name
     if "." not in args.model:
         if args.model == "CNN":
             model = Dummy()
@@ -45,7 +115,7 @@ def main(args):
         elif args.model == "ConvNeXtSAM":
             model = ConvNeXtSAM(num_classes)
         elif args.model == "ResNet1":
-            model = ResNet1(num_classes)
+            model = ResNet1(num_classes, n_in)
         elif args.model == "ResNet2":
             model = ResNet2(num_classes)
         elif args.model == 'ResNetTransform':
@@ -54,6 +124,20 @@ def main(args):
             model = ResNetTransform2(num_classes)
         elif args.model == 'ResNetTransformerAtt':
             model = ResNetTransformerAtt(num_classes)
+        elif args.model == 'TransformerEncDec':
+            model = TransformerEncDec(num_classes)
+        elif args.model == 'ResUnet':
+            model = ResUnet(num_classes)
+        elif args.model == 'ResUnetAtt':
+            model = ResUnetAtt(num_classes)
+        elif args.model == 'DarkNetCSP':
+            model = DarkNetCSP(num_classes, n_in)
+        elif args.model == "ResUnetAtt2":
+            model = ResUnetAtt2(num_classes)
+        elif args.model == 'DarkNetCSPBoth':
+            model = DarkNetCSPBoth(in_dim=n_in, bi=False, tri=False, both=True)
+        elif args.model == 'LearnableInitBiLSTM':
+            model = LearnableInitBiLSTM(num_classes, n_in)
         else:
             raise TypeError("Model name not recognised")
     else:
@@ -63,7 +147,7 @@ def main(args):
     mod = check_load_model(model, args.backbone)
 
     if args.freeze:
-        freeze_list = ['stem', 'S', 'DownSample']
+        freeze_list = ['stem', 'S', 'DownSample', 'sppf', 'classifier']
     else:
         freeze_list = None
 
@@ -75,33 +159,15 @@ def main(args):
     callbacks = Callbacks([stopper, saver])
 
     # initializing metrics
-    metrics = Metrics(num_classes=num_classes, device=device, top_k=1, thresh=0.5)
-
-    # dataset
-    if args.crops:  # crops dataset
-        crops_data = Crops()
-        crops_data.split(test_size=0.15)
-        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, normalization=args.data_norm)
-        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, normalization=args.data_norm)
-        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, normalization=args.data_norm)
-    elif args.crops_raw:
-        crops_data = Crops(parent='dataset/crops_raw')
-        crops_data.split(test_size=0.15)
-        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm)
-        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm)
-        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=True, normalization=args.data_norm)
-    elif args.cropped_seq:
-        data = CroppedSeq(parent='dataset/crops/patients')  # loaded and split
-        test_set = CroppedSeqDataset(data.test, mini_batch=256, mode=mode, normalization=args.data_norm)
-        val_set = CroppedSeqDataset(data.val, mini_batch=256, mode=mode, normalization=args.data_norm)
-        train_set = CroppedSeqDataset(data.train, mini_batch=256, mode=mode, normalization=args.data_norm)
-    elif args.cropped_seq_raw:
-        data = CroppedSeq()  # loaded and split
-        test_set = CroppedSeqDataset(data.test, mini_batch=256, mode=mode, raw=True, normalization=args.data_norm)
-        val_set = CroppedSeqDataset(data.val, mini_batch=256, mode=mode, raw=True, normalization=args.data_norm)
-        train_set = CroppedSeqDataset(data.train, mini_batch=256, mode=mode, raw=True, normalization=args.data_norm)
+    if not bi_head_f:
+        metrics = Metrics(num_classes=num_classes, device=device, top_k=1, thresh=0.5)
     else:
-        raise ValueError("data format not recognised")
+        metrics = (Metrics(num_classes=2, device=device, top_k=1, thresh=0.5), Metrics(num_classes=3, device=device, top_k=1, thresh=0.5))
+
+    if args.windowed_seq_raw or args.windowed_seq:
+        seq_flag = True
+    else:
+        seq_flag = False
 
     if args.weighted_loss:
         if args.mode == 'binary':
@@ -111,6 +177,12 @@ def main(args):
             elif args.crops or args.crops_raw:
                 # sill not computed (not userful actually as data are stratified and balanced)
                 weights = None
+            elif args.windowed_seq or args.windowed_seq_raw:
+                # weights = torch.tensor([0.63646569, 2.33196228], dtype=torch.float32)  # w=1200, s=600
+                # weights = torch.tensor([0.63420781, 2.36278286], dtype=torch.float32)  # w=1200, s=600 (removing borders)
+                weights = torch.tensor([1., 2.], dtype=torch.float32)  # invented
+                # weights = torch.tensor([0.64751537, 2.1947386], dtype=torch.float32)  # w=1000, s=500
+                # weights = torch.tensor([0.64552263, 2.21794587], dtype=torch.float32)  # w=1000, s=500 (removing borders)
         else:
             # not yet implemented
             weights = None
@@ -122,24 +194,34 @@ def main(args):
     opt = get_optimizer(mod, args.opt, args.lr0, momentum=args.momentum, weight_decay=args.weight_decay)
 
     # initializing loggers
-    logger = Loggers(metrics=metrics, save_path=save_path, opt=opt, device=device)
+    if not bi_head_f:
+        logger = Loggers(metrics=metrics, save_path=save_path, opt=opt, device=device)
+    else:
+        #  metrics1 -> binary; metrics2 -> all
+        logger = LoggersBoth(metrics1=metrics[0], metrics2=metrics[1], save_path=save_path, opt=opt, device=device)
 
     # lr scheduler
     sched = scheduler(opt, args.sched, args.lrf, epochs)
 
     # building loaders
-    if not (args.cropped_seq or args.cropped_seq_raw):
+    if args.crops or args.crops_raw or args.crops_all or args.crops_der:
         test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=padding_x)  # to pad
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=padding_x)  # to pad
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=padding_x)  # to pad
-    else:
+    elif args.cropped_seq or args.cropped_seq_raw:
         test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=keep_unchanged)
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=keep_unchanged)  # shuffling has no effect
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=False, collate_fn=keep_unchanged)
+    elif args.windowed_seq or args.windowed_seq_raw:
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
+        val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True)
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
+
 
     # building model
     model = ModelClass(mod, (train_loader, val_loader, test_loader), loss_fn=loss_fn, device=device, AMP=args.AMP,
-                       optimizer=opt, metrics=metrics, loggers=logger, callbacks=callbacks, sched=sched, freeze=freeze_list)
+                       optimizer=opt, metrics=metrics, loggers=logger, callbacks=callbacks, sched=sched,
+                       freeze=freeze_list, sequences=seq_flag, bi_head=bi_head_f)
 
     # training loop
     model.train_loop(epochs)
@@ -148,12 +230,16 @@ def main(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Parser")
-    parser.add_argument('--model', type=str, required=True, choices=["CNN", "ConvNeXt", "ConvNeXtSAM", "ResNet1", "ResNet2", "ResNetTransform", "ResNetTransform2", "ResNetTransformerAtt"], help='name of model to train or path to weights to train')
+    parser.add_argument('--model', type=str, required=True, choices=["CNN", "ConvNeXt", "ConvNeXtSAM", "ResNet1", "ResNet2",
+                                                                     "ResNetTransform", "ResNetTransform2", "ResNetTransformerAtt",
+                                                                     "TransformerEncDec", "ResUnet", "ResUnetAtt", "DarkNetCSP",
+                                                                     "ResUnetAtt2", "DarkNetCSPBoth", "LearnableInitBiLSTM"],
+                                                                      help='name of model to train or path to weights to train')
     parser.add_argument('--backbone', type=str, default=None, help='path to backbone weights for transformer architechtures')
     parser.add_argument('--freeze', action="store_true", help='whether to freeze backbone')
     parser.add_argument('--epochs', type=int, required=True, help='number of epochs')
     parser.add_argument('--batch_size', type=int, required=True, help='batch size')
-    parser.add_argument('--mode', type=str, required=True, choices=["binary", "all"], help="whether to use binary or full annotation")
+    parser.add_argument('--mode', type=str, required=True, choices=["binary", "all", "both"], help="whether to use binary or full annotation")
     parser.add_argument('--data_norm', type=str, default=None, choices=["min_max", "RobustScaler", "Z-score"], help="type of scaler for data")
     parser.add_argument('--folder', type=str, default="runs", help='name of folder to which saving results')
     parser.add_argument('--name', type=str, default="exp", help='name of experiment folder inside folder')
@@ -172,8 +258,12 @@ if __name__ == "__main__":
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--crops', action="store_true", help='whether to use Crops dataset')
     group.add_argument('--crops_raw', action="store_true", help='whether to use Crops_raw dataset (extracted from raw signal)')
+    group.add_argument('--crops_der', action="store_true", help='whether to use Crops + derivatives')
+    group.add_argument('--crops_all', action="store_true", help='whether to use Crops + raw + derivatives')
     group.add_argument('--cropped_seq_raw', action="store_true", help='whether to use CroopedSeq dataset on raw crops')
     group.add_argument('--cropped_seq', action="store_true", help='whether to use CroopedSeq dataset')
+    group.add_argument('--windowed_seq_raw', action="store_true", help="wheter to use raw windowed raw sequences")
+    group.add_argument('--windowed_seq', action="store_true", help="wheter to use raw windowed sequences")
 
     args = parser.parse_args()
 

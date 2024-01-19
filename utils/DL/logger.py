@@ -42,11 +42,11 @@ class SaveCSV(BaseCallback):
         :param
             --logs = LogsHolder object
     """
-    def __init__(self, logs, save_path):
+    def __init__(self, logs, save_path, name="results.csv"):
         super().__init__()
         self.save_path = save_path
         self.logs = logs
-        self.file_name = "results.csv"
+        self.file_name = name
         self.build_dict()
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
@@ -75,9 +75,10 @@ class SaveCSV(BaseCallback):
 
 
 class SaveFigures(BaseCallback):
-    def __init__(self, logs, save_path):
+    def __init__(self, logs, save_path, name="metrics.png"):
         self.save_path = save_path
         self.logs = logs
+        self.name = name
 
     def on_end(self):
         self.save_metrics()
@@ -93,7 +94,7 @@ class SaveFigures(BaseCallback):
         self.plot_metric("Recall", axes[1, 2])
 
         fig.tight_layout()
-        plt.savefig(self.save_path / "metrics.png", dpi=96)
+        plt.savefig(self.save_path / self.name, dpi=96)
         plt.close()
 
     def plot_metric(self, metric, ax):
@@ -143,7 +144,7 @@ class ROClogger(BaseCallback):
            --thresh: Threshold for transforming probability to binary {0,1} predictions (ONLY if binary)
        """
 
-    def __init__(self, save_path, num_classes=2, device='gpu', thresh=None):
+    def __init__(self, save_path, num_classes=2, device='gpu', thresh=None, name='ROC.png'):
         super().__init__()
 
         if device == "gpu" and torch.cuda.is_available():
@@ -152,6 +153,8 @@ class ROClogger(BaseCallback):
             self.device = "cpu"
 
         self.save_path = save_path
+
+        self.name = name
 
         self.run = False
         self.num_classes = num_classes
@@ -186,7 +189,7 @@ class ROClogger(BaseCallback):
         ax.plot([0, 1], [0, 1], color='darkblue', linestyle='--')
 
         plt.tight_layout()
-        plt.savefig(self.save_path / 'ROC.png', dpi=96)
+        plt.savefig(self.save_path / self.name, dpi=96)
         plt.close()
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
@@ -201,13 +204,15 @@ class PRClogger(BaseCallback):
            --thresh: Threshold for transforming probability to binary {0,1} predictions (ONLY if binary)
        """
 
-    def __init__(self, save_path, num_classes=2, device='gpu', thresh=None):
+    def __init__(self, save_path, num_classes=2, device='gpu', thresh=None, name='PRC.png'):
         super().__init__()
 
         if device == "gpu" and torch.cuda.is_available():
             self.device = 'cuda:0'
         else:
             self.device = "cpu"
+
+        self.name = name
 
         self.save_path = save_path
         self.run = False
@@ -260,7 +265,7 @@ class PRClogger(BaseCallback):
         ax.set_ylabel('Precision')
 
         plt.tight_layout()
-        plt.savefig(self.save_path / 'PRC.png', dpi=96)
+        plt.savefig(self.save_path / self.name, dpi=96)
         plt.close()
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
@@ -285,7 +290,7 @@ class ConfusionMatrixLogger(BaseCallback):
            --device: device "cpu" or "gpu"
        """
 
-    def __init__(self, save_path, num_classes=2, device='gpu'):
+    def __init__(self, save_path, num_classes=2, device='gpu', name='ConfusionMatrix.png'):
         super().__init__()
 
         if device == "gpu" and torch.cuda.is_available():
@@ -293,6 +298,7 @@ class ConfusionMatrixLogger(BaseCallback):
         else:
             self.device = "cpu"
 
+        self.name = name
         self.save_path = save_path
 
         self.num_classes = num_classes
@@ -318,12 +324,11 @@ class ConfusionMatrixLogger(BaseCallback):
     def on_end(self):
         fig, ax = plt.subplots(1, 1, figsize=(20, 11))
         self.metric.plot(val=self.cm, ax=ax)
-        plt.savefig(self.save_path / 'ConfusionMatrix.png', dpi=96)
+        plt.savefig(self.save_path / self.name, dpi=96)
         plt.close()
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
         pass
-
 
 
 class Loggers(BaseCallback):
@@ -362,6 +367,44 @@ class Loggers(BaseCallback):
         setattr(self, "list", [value for _, value in vars(self).items()])
 
 
+class LoggersBoth(BaseCallback):
+    def __init__(self, metrics1, metrics2, opt, save_path, device):
+        super().__init__()
+        self.logs1 = LogsHolder(metrics1)
+        self.csv1 = SaveCSV(self.logs1, save_path, name='metrics_binary.csv')
+        self.lr1 = LrLogger(opt, save_path)
+        self.figure_saver1 = SaveFigures(self.logs1, save_path, name='metrics_binary.png')
+        self.ROC1 = ROClogger(save_path, num_classes=metrics1.num_classes, device=device, name='ROC_binary.png')
+        self.PRC1 = PRClogger(save_path, num_classes=metrics1.num_classes, device=device, name='PRC_binary.png')
+        self.cm1 = ConfusionMatrixLogger(save_path, metrics1.num_classes, device, name='confusion_matrix_binary.png')
+
+        self.logs2 = LogsHolder(metrics2)
+        self.csv2 = SaveCSV(self.logs2, save_path, name='metrics_all.csv')
+        self.figure_saver2 = SaveFigures(self.logs2, save_path, name='metrics_all.png')
+        self.build_list()
+
+    def on_epoch_end(self, epoch=None):
+        for obj in self.list:
+            obj.on_epoch_end(epoch)
+
+    def on_val_batch_end(self, output=None, target=None, batch=None):
+        for obj in self.list:
+            obj.on_val_batch_end(output, target, batch)
+
+    def on_val_end(self, metrics=None, epoch=None):
+        for obj in self.list:
+            obj.on_val_end(metrics, epoch)
+
+    def on_epoch_start(self, epoch=None, max_epoch=None):
+        for obj in self.list:
+            obj.on_epoch_start(epoch, max_epoch)
+
+    def on_end(self):
+        for obj in self.list:
+            obj.on_end()
+
+    def build_list(self):
+        setattr(self, "list", [value for _, value in vars(self).items()])
 
 
 
