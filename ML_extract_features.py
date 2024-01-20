@@ -2,7 +2,8 @@
 import os
 import numpy as np
 import pandas as pd
-from scipy.stats import tvar, skew, kurtosis
+from scipy.stats import tvar, skew, kurtosis, entropy
+from scipy.signal import welch, spectrogram
 from scipy.integrate import simps
 from tqdm import tqdm
 
@@ -49,7 +50,8 @@ class FeatureConstructor:
     def get_intra_crop_features(self):
         ""
         self.ft_intra_crop_names = ['crop_duration','t_peak','mean','median','std','tvar','skew','kurt',
-                                    'auc','peak_amplitude','pulse_width','symmetry']
+                                    'auc','peak_amplitude','pulse_width','symmetry', 'spectral_entropy','average_energy',
+                                    'rmssd', 'std_spectrogram']
         self.ft_intra_crop = np.zeros(((self.peaks.shape[0]), len(self.ft_intra_crop_names)))
 
         # Construct self.crops
@@ -69,7 +71,11 @@ class FeatureConstructor:
                  simps(np.abs(crop), dx=1/self.fs), # AUC: Simpson's rule for numeral integration
                  np.max(crop)-np.min(crop),
                  self.pulse_width(crop),
-                 self.symmetry_index(crop)
+                 self.symmetry_index(crop),
+                 self.spectral_entropy(crop),
+                 self.average_energy(crop),
+                 self.rmssd(crop),
+                 self.std_spectrogram(crop)
                  ])
 
     def get_inter_crop_features(self):
@@ -111,6 +117,9 @@ class FeatureConstructor:
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
 
+        
+
+
         file_path = os.path.join(target_folder, self.data_name.split('.')[0] + '.csv')
         self.df.to_csv(file_path, index=False)
 
@@ -135,6 +144,8 @@ class FeatureConstructor:
         width = (idx_t2 - idx_t1)/self.fs # [s]
 
         return width
+    
+    
 
     #From https://stackoverflow.com/questions/2566412/find-nearest-value-in-numpy-array
     def find_nearest(self, array, value):
@@ -158,6 +169,32 @@ class FeatureConstructor:
         
         return symmetry_index
     
+    def spectral_entropy(self, crop):
+
+        _, psd = welch(crop, self.fs)
+        norm_psd = psd/np.mean(psd)
+        spec_entropy = entropy(norm_psd)
+
+        return spec_entropy
+    
+    def average_energy(self,crop):
+
+        _,_,spectrog = spectrogram(crop, self.fs)
+
+        return np.mean(np.abs(spectrog))
+    
+    def rmssd(self, crop): #root mean square of successive differences --> get some information about speed of changes within a crop
+
+        diff_signal = np.diff(crop)
+        rms_diff = np.sqrt(np.mean(diff_signal**2))
+
+        return rms_diff
+    
+    def std_spectrogram(self, crop):
+        _,_,spectrog = spectrogram(crop, self.fs)
+        return np.std(spectrog)    
+
+    
     #---------------------------------------------------
     #   Functions used in get_inter_crop_features()
     #---------------------------------------------------
@@ -165,7 +202,6 @@ class FeatureConstructor:
     def peak_to_peak_times(self):
         time_between_peaks = np.diff(self.peaks) / self.fs
         mean_PTP = np.mean(time_between_peaks)
-        time_between_peaks = mean_PTP
         time_between_peaks = np.insert(time_between_peaks, 0, mean_PTP)
 
         return time_between_peaks
@@ -203,23 +239,29 @@ class FeatureConstructor:
     #     return dom_freq
 
 def process_files(directory):
-    compute = False
+    # compute = False
 
     for file_name in tqdm(os.listdir(directory)):
 
-        if '108' in file_name:
-            compute = True
+        # if '108' in file_name:
+        #     compute = True
         
-        if compute:
-            recording = FeatureConstructor(file_name)
-            recording.get_intra_crop_features()
-            recording.get_inter_crop_features()
-            recording.get_patient_specific_features()
-            recording.construct_dataframe()
+        # if compute:
+        print(file_name)
+        print('scratch')
+        recording = FeatureConstructor(file_name)
+        recording.get_intra_crop_features()
+        recording.get_inter_crop_features()
+        recording.get_patient_specific_features()
+        recording.construct_dataframe()
+
+
+
 
 if __name__ == "__main__":
     current_directory = os.path.dirname(os.path.abspath(__file__))
     folder_name = 'dataset/data/'
     target_folder = os.path.join(current_directory, folder_name)
+    print("KAKA")
     
     process_files(target_folder)
