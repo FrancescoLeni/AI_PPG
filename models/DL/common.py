@@ -8,13 +8,17 @@ from models.DL.utility_blocks import SelfAttentionModule, PatchMerging, PatchExp
 
 
 class Dummy(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes):
         super().__init__()
-        self.conv = nn.Conv1d(1,10,3,1,1)
-        self.fc = nn.Linear(10,2)
+        self.stem = ConvNormAct(1, 64, 5, 2, 2)
+        self.a = ResBlock(64)
+        self.b = ResBlock(64)
+
+        self.fc = nn.Linear(64, num_classes)
 
     def forward(self,x):
-        x = self.conv(x)
+        x = self.b(self.a(self.stem(x)))
+
         return self.fc(x.mean(dim=2).view(x.shape[0], -1)) # x.mean is GAP
 
 
@@ -720,11 +724,12 @@ class DarkNetCSP(nn.Module):
 
         self.sppf = SPPF(self.C[-1], self.C[-1])
 
-        self.classifier = nn.Sequential(nn.Linear(self.C[-1], self.C[-1] // 4),
-                                        nn.SiLU(),
-                                        nn.Linear(self.C[-1] // 4, self.C[-1] // 16),
-                                        nn.SiLU(),
-                                        nn.Linear(self.C[-1] // 16, num_classes)
+        self.classifier = nn.Sequential(
+                                        # nn.Linear(self.C[-1], self.C[-1] // 4),
+                                        # nn.SiLU(),
+                                        # nn.Linear(self.C[-1] // 4, self.C[-1] // 16),
+                                        # nn.SiLU(),
+                                        nn.Linear(self.C[-1], num_classes)
                                         )
 
     def forward(self, x):
@@ -868,6 +873,49 @@ class DarkNetCSPBoth(nn.Module):
                         idx = torch.concat((idx, torch.tensor([i], device=x.device)), dim=0)
 
             return x1, (x2, idx)
+
+
+class LearnableInitBiLSTM2(nn.Module):
+    def __init__(self, num_classes, in_dim):
+        super().__init__()
+
+        c2 = 128
+        num_layers = 4
+
+        self.stem = ConvNormAct(1, 64, 5, 2, 2)
+        self.a = ResBlock(64)
+        self.b = ConvNormAct(64, 128, 5, 2, 2)
+        self.c = ResBlock(128)
+
+        self.h0 = nn.Parameter(torch.zeros(num_layers * 2, 1, c2))
+        self.c0 = nn.Parameter(torch.zeros(num_layers * 2, 1, c2))
+
+        self.lstm = nn.LSTM(in_dim, c2, num_layers, batch_first=True, bidirectional=True)
+
+        self.pw = nn.Conv1d(c2*2, c2, 1)
+        self.act = nn.ReLU()
+
+        # Output layer
+        self.fc = nn.Linear(c2*2, num_classes)  # Multiply by 2 for bidirectional
+
+    def forward(self, x):
+        # Use learnable initial hidden states
+        h0 = self.h0.expand(-1, x.size(0), -1).contiguous()
+        c0 = self.c0.expand(-1, x.size(0), -1).contiguous()
+
+        x2 = self.c(self.b(self.a(self.stem(x)))).mean(dim=2).view(x.shape[0], -1)
+
+        x = x.permute(0, 2, 1)
+
+        # Forward pass through LSTM layer
+        out, _ = self.lstm(x, (h0, c0))
+
+        out = self.act(self.pw(out.permute(0, 2, 1)).mean(dim=2).view(x.shape[0], -1))
+
+        # Fully connected layer
+        out = self.fc(torch.concat((out, x2), dim=1))
+
+        return out
 
 
 

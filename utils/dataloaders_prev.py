@@ -1,5 +1,5 @@
 from preprocessing.filtering import Preprocess
-from preprocessing.fiducials import FpCollection
+from preprocessing.fiducials2 import FpCollection
 from preprocessing import PPG
 
 from sklearn.model_selection import train_test_split
@@ -14,7 +14,7 @@ import os
 import h5py
 
 
-class OneSignal:
+class OneSignal1:
     def __init__(self, data_name = None):
         """
         :param
@@ -90,9 +90,9 @@ class OneSignal:
 
         self.on = list(fiducials['on'][:]) # here i'm wasting a lot more points (and time for calculating them...)
 
-        self.add_onsets()
-
-        self.normalize(data_min, data_max)
+        # self.add_onsets()
+        #
+        # self.normalize(data_min, data_max)
 
     def get_crops(self):
 

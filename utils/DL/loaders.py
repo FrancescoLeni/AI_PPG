@@ -64,7 +64,7 @@ class CropsDataset(torch.utils.data.Dataset):
         data, target = self.data[idx]
         data = torch.from_numpy(data.astype('float32')).permute(1, 0)  # C-L for 1Dconvs
         if not self.bi_head:
-            target = torch.LongTensor([target])
+            target = torch.LongTensor([target]).squeeze()
         else:
             if target == 2:
                 t1 = 1
@@ -86,47 +86,50 @@ class CropsDataset(torch.utils.data.Dataset):
     def build_N_V_S(self, data, normalization):
         if self.signal_mode == 'single':
             for x, y in data:
-                x = self.normalize(x, mode=normalization, data='signal', raw=self.raw)
-                if y == "V":
-                    self.V.append(x)
-                elif y == "S":
-                    self.S.append(x)
-                else:
-                    self.N.append(x)
+                if np.max(x) < 4.55 and np.min(x) > -4.55:  # Q3+3IQR, Q1-3IQR
+                    x = self.normalize(x, mode=normalization, data='signal', raw=self.raw)
+                    if y == "V":
+                        self.V.append(x)
+                    elif y == "S":
+                        self.S.append(x)
+                    else:
+                        self.N.append(x)
         elif self.signal_mode == 'derivatives':
             for (x, _, j, a, v), y in data:
-                if normalization:
-                    x = self.normalize(x, mode=normalization, data='signal')
-                    j = self.normalize(j, mode=normalization, data='jpg')
-                    a = self.normalize(a, mode=normalization, data='apg')
-                    v = self.normalize(v, mode=normalization, data='vpg')
+                if np.max(x) < 4.55 and np.min(x) > -4.55:  # Q3+3IQR, Q1-3IQR
+                    if normalization:
+                        x = self.normalize(x, mode=normalization, data='signal')
+                        j = self.normalize(j, mode=normalization, data='jpg')
+                        a = self.normalize(a, mode=normalization, data='apg')
+                        v = self.normalize(v, mode=normalization, data='vpg')
 
-                    x = np.concatenate((x, j, a, v), axis=-1)  # obtaining (crops_len, 4)
+                        x = np.concatenate((x, j, a, v), axis=-1)  # obtaining (crops_len, 4)
 
-                if y == "V":
-                    self.V.append(x)
-                elif y == "S":
-                    self.S.append(x)
-                else:
-                    self.N.append(x)
+                    if y == "V":
+                        self.V.append(x)
+                    elif y == "S":
+                        self.S.append(x)
+                    else:
+                        self.N.append(x)
         elif self.signal_mode == 'all':
             # assumes to be given the filtered (default) parent to Crops instance
             for (x, r, j, a, v), y in data:
-                if normalization:
-                    x = self.normalize(x, mode=normalization, data='signal', raw=False)
-                    r = self.normalize(r, mode=normalization, data='signal', raw=True)
-                    j = self.normalize(j, mode=normalization, data='jpg', raw=self.raw)
-                    a = self.normalize(a, mode=normalization, data='apg', raw=self.raw)
-                    v = self.normalize(v, mode=normalization, data='vpg', raw=self.raw)
+                if np.max(x) < 4.55 and np.min(x) > -4.55:  # Q3+3IQR, Q1-3IQR
+                    if normalization:
+                        x = self.normalize(x, mode=normalization, data='signal', raw=False)
+                        r = self.normalize(r, mode=normalization, data='signal', raw=True)
+                        j = self.normalize(j, mode=normalization, data='jpg', raw=self.raw)
+                        a = self.normalize(a, mode=normalization, data='apg', raw=self.raw)
+                        v = self.normalize(v, mode=normalization, data='vpg', raw=self.raw)
 
-                    x = np.concatenate((x, r, j, a, v), axis=-1)  # obtaining (crops_len, 5)
+                        x = np.concatenate((x, r, j, a, v), axis=-1)  # obtaining (crops_len, 5)
 
-                if y == "V":
-                    self.V.append(x)
-                elif y == "S":
-                    self.S.append(x)
-                else:
-                    self.N.append(x)
+                    if y == "V":
+                        self.V.append(x)
+                    elif y == "S":
+                        self.S.append(x)
+                    else:
+                        self.N.append(x)
 
     def build(self):
         self.data = self.shuffle()
@@ -164,14 +167,16 @@ class CropsDataset(torch.utils.data.Dataset):
         else:
             raise TypeError('Normalization mode not recognised, use one of ["min_max", "RobustScaler", "Z-score"]')
 
-    def min_max(self, x, data_wide=False, data='signal', raw=False):
-        if not data_wide:
+    def min_max(self, x, crops_wise=False, data='signal', raw=False):
+        if crops_wise:
             x = (x - np.min(x)) / (np.max(x) - np.min(x))
         else:
             if data == 'signal':
                 if raw:
-                    d_min = self.stats['min_raw']
-                    d_max = self.stats['max_raw']
+                    # d_min = self.stats['min_raw']
+                    # d_max = self.stats['max_raw']
+                    d_min = -4.55  # Q3+3IQR, Q1-3IQR
+                    d_max = 4.55
                 else:
                     d_min = self.stats['min_filtered']
                     d_max = self.stats['max_filtered']
@@ -187,7 +192,7 @@ class CropsDataset(torch.utils.data.Dataset):
             else:
                 raise TypeError('data type not recognised')
 
-            x = (x - d_min) / (d_min - d_max)
+            x = (x - d_min) / (d_max - d_min)
         return x
 
     def RobustScaler(self, x, data='signal', raw=False):
@@ -367,8 +372,8 @@ class CroppedSeqDataset(torch.utils.data.Dataset):
         else:
             raise TypeError('Normalization mode not recognised, use one of ["min_max", "RobustScaler", "Z-score"]')
 
-    def min_max(self, x, data_wide=False):
-        if not data_wide:
+    def min_max(self, x, crops_wide=False):
+        if crops_wide:
             x = (x - np.min(x)) / (np.max(x) - np.min(x))
         else:
             if self.raw:
@@ -377,7 +382,7 @@ class CroppedSeqDataset(torch.utils.data.Dataset):
             else:
                 d_min = self.stats['min_filtered']
                 d_max = self.stats['max_filtered']
-            x = (x - d_min) / (d_min - d_max)
+            x = (x - d_min) / (d_max - d_min)
         return x
 
     def RobustScaler(self, x):
@@ -485,8 +490,8 @@ class WindowedSeq:
         #     label_map[pos] = 7
 
         # adding surroundings (coded as 5)
-        for i, pos in enumerate(surroundings):
-            label_map[pos] = 5
+        # for i, pos in enumerate(surroundings):
+        #     label_map[pos] = 5
 
         windows = []
         for j, i in enumerate(range(0, data.shape[0] - self.window, self.stride)):
@@ -561,8 +566,8 @@ class WindowedSeq:
         else:
             raise TypeError('Normalization mode not recognised, use one of ["min_max", "RobustScaler", "Z-score"]')
 
-    def min_max(self, x, data_wide=False):
-        if not data_wide:
+    def min_max(self, x, crops_wide=False):
+        if crops_wide:
             x = (x - np.min(x)) / (np.max(x) - np.min(x))
         else:
             if self.raw:
@@ -571,7 +576,7 @@ class WindowedSeq:
             else:
                 d_min = self.stats['min_filtered']
                 d_max = self.stats['max_filtered']
-            x = (x - d_min) / (d_min - d_max)
+            x = (x - d_min) / (d_max - d_min)
         return x
 
     def RobustScaler(self, x):

@@ -1,3 +1,3 @@
-mean_raw,std_raw,median_raw,Q1_raw,Q3_raw,IQR_raw,mean_filtered,std_filtered,median_filtered,Q1_filtered,Q3_filtered,IQR_filtered,max_raw,min_raw,max_filtered,min_filtered
+mean_raw,std_raw,median_raw,Q1_raw,Q3_raw,IQR_raw,mean_filtered,std_filtered,median_filtered,Q1_filtered,Q3_filtered,IQR_filtered,max_raw,min_raw,max_filtered,min_filtered,out_3iqr_raw,out_15iqr_raw,out_3iqr_filtered,out_15iqr_filtered
 -0.03537388405436169,10.920080697795239,-0.0795541386216827,-1.1736608134939601,1.1504771189935101,2.3241379324874702,-0.0004020890295900939,8.334499867991749,-0.05415469739026863,-1.0384991074733434,1.0724979915340804,2.3241379324874702,627.595770147794,"-581.177547400369
-",391.0545858502311,-371.8572581462759
+",391.0545858502311,-371.8572581462759,48947,76065,35993,59302

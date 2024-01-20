@@ -5,7 +5,7 @@ import torch.nn as nn
 from models.DL import ModelClass, check_load_model
 from models.DL.common import Dummy, ConvNeXt, ConvNeXtSAM, ResNet1, ResNet2, ResNetTransform, ResNetTransform2, \
                              ResNetTransformerAtt, TransformerEncDec, ResUnet, ResUnetAtt, DarkNetCSP, ResUnetAtt2, \
-                             DarkNetCSPBoth, LearnableInitBiLSTM
+                             DarkNetCSPBoth, LearnableInitBiLSTM, LearnableInitBiLSTM2
 from utils.dataloaders import Crops, CroppedSeq, Sequences
 from utils.DL.callbacks import Callbacks, EarlyStopping, Saver
 from utils.DL.loaders import CropsDataset, CroppedSeqDataset, WindowedSeq
@@ -34,7 +34,7 @@ def main(args):
     else:
         num_classes = 3
 
-    bi_head_f = True
+    bi_head_f = False
 
     # saving inputs
     json_from_parser(args, save_path)
@@ -58,6 +58,26 @@ def main(args):
         val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
                                sig_mode='single', bi_head=bi_head_f)
         train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                                 sig_mode='single', bi_head=bi_head_f)
+        n_in = 1
+    elif args.fixed_crops_raw:
+        crops_data = Crops(parent='dataset/fixed_crops_raw')
+        crops_data.split(test_size=0.15)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm,
+                                sig_mode='single', bi_head=bi_head_f)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                               sig_mode='single', bi_head=bi_head_f)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
+                                 sig_mode='single', bi_head=bi_head_f)
+        n_in = 1
+    elif args.fixed_crops:
+        crops_data = Crops(parent='dataset/fixed_crops')
+        crops_data.split(test_size=0.15)
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=False, normalization=args.data_norm,
+                                sig_mode='single', bi_head=bi_head_f)
+        val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=False, normalization=args.data_norm,
+                               sig_mode='single', bi_head=bi_head_f)
+        train_set = CropsDataset(crops_data.train, mode=mode, stratify=True, raw=False, normalization=args.data_norm,
                                  sig_mode='single', bi_head=bi_head_f)
         n_in = 1
     elif args.crops_der:
@@ -107,8 +127,8 @@ def main(args):
     else:
         raise ValueError("data format not recognised")    # checking whether you parsed weights or model name
     if "." not in args.model:
-        if args.model == "CNN":
-            model = Dummy()
+        if args.model == "Dummy":
+            model = Dummy(num_classes)
             # loading model = bla bla bla
         elif args.model == "ConvNeXt":
             model = ConvNeXt(num_classes)
@@ -138,6 +158,8 @@ def main(args):
             model = DarkNetCSPBoth(in_dim=n_in, bi=False, tri=False, both=True)
         elif args.model == 'LearnableInitBiLSTM':
             model = LearnableInitBiLSTM(num_classes, n_in)
+        elif args.model == 'LearnableInitBiLSTM2':
+            model = LearnableInitBiLSTM2(num_classes, n_in)
         else:
             raise TypeError("Model name not recognised")
     else:
@@ -212,7 +234,7 @@ def main(args):
         test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=keep_unchanged)
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=keep_unchanged)  # shuffling has no effect
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=False, collate_fn=keep_unchanged)
-    elif args.windowed_seq or args.windowed_seq_raw:
+    elif args.windowed_seq or args.windowed_seq_raw or args.fixed_crops or args.fixed_crops_raw:
         test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True)
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
@@ -233,7 +255,8 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, required=True, choices=["CNN", "ConvNeXt", "ConvNeXtSAM", "ResNet1", "ResNet2",
                                                                      "ResNetTransform", "ResNetTransform2", "ResNetTransformerAtt",
                                                                      "TransformerEncDec", "ResUnet", "ResUnetAtt", "DarkNetCSP",
-                                                                     "ResUnetAtt2", "DarkNetCSPBoth", "LearnableInitBiLSTM"],
+                                                                     "ResUnetAtt2", "DarkNetCSPBoth", "LearnableInitBiLSTM",
+                                                                     "Dummy", "LearnableInitBiLSTM2"],
                                                                       help='name of model to train or path to weights to train')
     parser.add_argument('--backbone', type=str, default=None, help='path to backbone weights for transformer architechtures')
     parser.add_argument('--freeze', action="store_true", help='whether to freeze backbone')
@@ -264,6 +287,8 @@ if __name__ == "__main__":
     group.add_argument('--cropped_seq', action="store_true", help='whether to use CroopedSeq dataset')
     group.add_argument('--windowed_seq_raw', action="store_true", help="wheter to use raw windowed raw sequences")
     group.add_argument('--windowed_seq', action="store_true", help="wheter to use raw windowed sequences")
+    group.add_argument('--fixed_crops', action="store_true", help='whether to use fixed Crops dataset')
+    group.add_argument('--fixed_crops_raw', action="store_true", help='whether to use fixed Crops_raw dataset (extracted from raw signal)')
 
     args = parser.parse_args()
 

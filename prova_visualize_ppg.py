@@ -6,13 +6,13 @@ from utils import random_state
 
 random_state(36)
 
-signal = OneSignal('S109_250.mat')
+signal = OneSignal('S100_250.mat')
 
 signal.filter(fL=0.5, fH=4.3, order=4)
 
 signal.align_onsets()
 # 445000
-raw_vs_filtered(signal.raw, signal.ppg, signal.on, signal.peaks, signal.labels, dt=320050) # dt indicates the displacement of the signal
+raw_vs_filtered(signal.raw, signal.ppg, signal.on, signal.peaks, signal.labels, dt=52850, th_raw=3.47, th_filter=3.39) # dt indicates the displacement of the signal
 
 # crop, lab = signal.crop()
 # crop1, lab1 = signal.crop()

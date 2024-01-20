@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 
 
 
-def raw_vs_filtered(raw, filtered, onsets, peaks, labels, dt = 0):
+def raw_vs_filtered(raw, filtered, onsets, peaks, labels, dt = 0, th_raw=3.47, th_filter=3.39):
     """
     :param
         --raw: raw signal
@@ -40,6 +40,20 @@ def raw_vs_filtered(raw, filtered, onsets, peaks, labels, dt = 0):
     for x, y, label in labs_filt[list(peaks).index(dt+np.nonzero(pks[dt:dt+5000])[0][0]):list(peaks).index(dt+np.nonzero(pks[dt:dt+5000])[0][-1])+1]:
         axes[1].text(x, y+0.01*abs(y), label, fontsize=8, color='black')
     axes[1].set_title('Filtered')
+
+    axes[0].plot([dt, dt+5000], [th_raw, th_raw], color='darkblue', linestyle='--')
+    axes[0].plot([dt, dt+5000], [-th_raw, -th_raw], color='darkblue', linestyle='--')
+    axes[0].plot([dt, dt+5000], [4.63, 4.63], color='red', linestyle='--')
+    axes[0].plot([dt, dt+5000], [-4.63, -4.63], color='red', linestyle='--')
+    axes[0].plot([dt, dt+5000], [8.11, 8.11], color='orange', linestyle='--')
+    axes[0].plot([dt, dt+5000], [-8.11, -8.11], color='orange', linestyle='--')
+
+    axes[1].plot([dt, dt+5000], [th_filter, th_filter], color='darkblue', linestyle='--')
+    axes[1].plot([dt, dt+5000], [-th_filter, -th_filter], color='darkblue', linestyle='--')
+    axes[1].plot([dt, dt + 5000], [4.55, 4.55], color='red', linestyle='--')
+    axes[1].plot([dt, dt + 5000], [-4.55, -4.55], color='red', linestyle='--')
+    axes[1].plot([dt, dt + 5000], [8.03, 8.03], color='orange', linestyle='--')
+    axes[1].plot([dt, dt + 5000], [-8.03, -8.03], color='orange', linestyle='--')
 
     plt.tight_layout()
     plt.show()

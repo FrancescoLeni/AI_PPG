@@ -170,6 +170,42 @@ class OneSignal:
             self.indx += 1
             return (crop, lab), (c_raw, l_raw), (c_j, c_v, c_a)
 
+    def fixed_crop(self, left=70, right=137, all=True):
+        c_raw = []
+        c_filtered = []
+        c_jpg = []
+        c_vpg = []
+        c_apg = []
+
+        # padding to allow windowing
+        if all:
+            raw = np.concatenate((np.zeros((300, 1)), self.raw))
+            raw = np.concatenate((raw, np.zeros((300, 1))))
+            ppg = np.concatenate((np.zeros((300, 1)), self.ppg[:, np.newaxis]))
+            ppg = np.concatenate((ppg, np.zeros((300, 1))))
+            jpg = np.concatenate((np.zeros((300, 1)), self.jpg[:, np.newaxis]))
+            jpg = np.concatenate((jpg, np.zeros((300, 1))))
+            vpg = np.concatenate((np.zeros((300, 1)), self.vpg[:, np.newaxis]))
+            vpg = np.concatenate((vpg, np.zeros((300, 1))))
+            apg = np.concatenate((np.zeros((300, 1)), self.apg[:, np.newaxis]))
+            apg = np.concatenate((apg, np.zeros((300, 1))))
+
+            for i, peak in enumerate(self.peaks):
+                peak = peak[0] + 100
+                c_raw.append((raw[peak-left:peak+right], self.labels[i]))
+                c_filtered.append((ppg[peak-left:peak+right], self.labels[i]))
+                c_jpg.append((jpg[peak-left:peak+right], self.labels[i]))
+                c_vpg.append((vpg[peak-left:peak+right], self.labels[i]))
+                c_apg.append((apg[peak-left:peak+right], self.labels[i]))
+            return c_raw, c_filtered, c_jpg, c_vpg, c_apg
+        else:
+            raw = np.concatenate((np.zeros((300, 1)), self.raw))
+            raw = np.concatenate((raw, np.zeros((300, 1))))
+            for i, peak in enumerate(self.peaks):
+                peak = peak[0] + 100
+                c_raw.append((raw[peak-left:peak+right], self.labels[i]))
+            return c_raw
+
 
 class Crops:
     def __init__(self, N="N_crops.h5", V="V_crops.h5", S="S_crops.h5", parent='dataset/crops', seed=36):
