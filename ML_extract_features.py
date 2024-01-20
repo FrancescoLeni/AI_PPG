@@ -74,12 +74,12 @@ class FeatureConstructor:
 
     def get_inter_crop_features(self):
         ""
-        self.ft_inter_crop_names = ['PTP','N_last_X_s']
+        self.ft_inter_crop_names = ['PTP','A_to_N_ratio']
 
         self.ft_inter_crop = np.zeros(((self.peaks.shape[0]), len(self.ft_inter_crop_names)))
         
         self.ft_inter_crop[:,0] = self.peak_to_peak_times()
-        self.ft_inter_crop[:,1] = self.N_ratio()
+        self.ft_inter_crop[:,1] = self.A_to_N_ratio()
 
     def get_patient_specific_features(self):
         ""
