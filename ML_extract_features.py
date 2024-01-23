@@ -96,7 +96,7 @@ class FeatureConstructor:
 
         
 
-    def construct_dataframe(self, out_file=''):
+    def construct_dataframe(self, out_folder=''):
         # Get features
         self.feature_names = self.ft_intra_crop_names + self.ft_inter_crop_names + self.ft_patient_names
         features = np.concatenate([self.ft_intra_crop, self.ft_inter_crop, self.ft_patient], axis=-1)
@@ -109,19 +109,21 @@ class FeatureConstructor:
         self.df = pd.DataFrame(data)
 
         # Save DataFrame to .csv file
-        current_directory = os.path.dirname(os.path.abspath('__file__'))
-        folder_name = 'dataset/ML_features/'
-        target_folder = os.path.join(current_directory, folder_name)
+        if out_folder != '':
+            current_directory = os.path.dirname(os.path.abspath('__file__'))
+            folder_name = 'dataset/ML_features/'
+            target_folder = os.path.join(current_directory, folder_name)
+        else:
+            target_folder = out_folder
 
         ## Check if the folder exists and create it if not
         if not os.path.exists(target_folder):
             os.makedirs(target_folder)
 
-        
-
-
         file_path = os.path.join(target_folder, self.data_name.split('.')[0] + '.csv')
         self.df.to_csv(file_path, index=False)
+
+        return self.df
 
     #---------------------------------------------------
     #   Functions used in get_intra_crop_features()
@@ -248,7 +250,6 @@ def process_files(directory):
         
         # if compute:
         print(file_name)
-        print('scratch')
         recording = FeatureConstructor(file_name)
         recording.get_intra_crop_features()
         recording.get_inter_crop_features()
@@ -262,6 +263,5 @@ if __name__ == "__main__":
     current_directory = os.path.dirname(os.path.abspath(__file__))
     folder_name = 'dataset/data/'
     target_folder = os.path.join(current_directory, folder_name)
-    print("KAKA")
     
     process_files(target_folder)
