@@ -109,7 +109,7 @@ class FeatureConstructor:
         self.df = pd.DataFrame(data)
 
         # Save DataFrame to .csv file
-        if out_folder != '':
+        if out_folder == '':
             current_directory = os.path.dirname(os.path.abspath('__file__'))
             folder_name = 'dataset/ML_features/'
             target_folder = os.path.join(current_directory, folder_name)
@@ -261,7 +261,7 @@ def process_files(directory):
 
 if __name__ == "__main__":
     current_directory = os.path.dirname(os.path.abspath(__file__))
-    folder_name = 'dataset/data/'
+    folder_name = '../../dataset/data/'
     target_folder = os.path.join(current_directory, folder_name)
     
     process_files(target_folder)
