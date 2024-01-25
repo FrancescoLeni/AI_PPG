@@ -3,6 +3,7 @@ Repo for Applied AI PPG classification project
 
 The repo is structured to handle the training of a great variety of models and architectures.
 
+* 'organize_dataset.py' is used to rearrange the data in more handy format and to extract crops.
 * DL models are trained and testing using 'DL_train.py' 
 * ML training can be handled using 'ML_experiments.py' 
 * 'NB_ML_inference.pynb' is used for ML models testing
