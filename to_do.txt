@@ -1,2 +1,0 @@
-- Stratification: N: 5O, V: 25, S: 25
-- Decide on set of patients to keep as test set (for instance: set aside all patients starting from  S100)
