@@ -13,10 +13,11 @@ class LogsHolder(BaseCallback):
         :param
             --metrics = metrics object
     """
-    def __init__(self, metrics):
+    def __init__(self, metrics, test=False):
         super().__init__()
         self.metrics = metrics
         self.build_metrics_dict()
+        self.test = test
 
     def build_metrics_dict(self):
         setattr(self, "dict", {key: [] for key in self.metrics.dict})
@@ -27,14 +28,25 @@ class LogsHolder(BaseCallback):
                     self.dict[key+f"_{i}"] = []
 
     def on_epoch_end(self, epoch=None):
-        for key in self.metrics.dict:
-            if "loss" in key:
-                self.dict[key].append(self.metrics.dict[key][0])
-            else:
-                for i in range(len(self.metrics.dict[key])):
-                    self.dict[key+f"_{i}"].append(self.metrics.dict[key][i][0])
-                flat = [item[0] for item in self.metrics.dict[key]]
-                self.dict[key].append(np.float16(sum(flat)/len(flat)))  # mean value
+        if not self.test:
+            for key in self.metrics.dict:
+                if "loss" in key:
+                    self.dict[key].append(self.metrics.dict[key][0])
+                else:
+                    for i in range(len(self.metrics.dict[key])):
+                        self.dict[key+f"_{i}"].append(self.metrics.dict[key][i][0])
+                    flat = [item[0] for item in self.metrics.dict[key]]
+                    self.dict[key].append(np.float16(sum(flat)/len(flat)))  # mean value
+        else:
+            for key in self.metrics.dict:
+                if 'train' not in key:
+                    if "loss" in key:
+                        pass
+                    else:
+                        for i in range(len(self.metrics.dict[key])):
+                            self.dict[key+f"_{i}"].append(self.metrics.dict[key][i][0])
+                        flat = [item[0] for item in self.metrics.dict[key]]
+                        self.dict[key].append(np.float16(sum(flat)/len(flat)))  # mean value
 
 
 class SaveCSV(BaseCallback):
@@ -42,12 +54,13 @@ class SaveCSV(BaseCallback):
         :param
             --logs = LogsHolder object
     """
-    def __init__(self, logs, save_path, name="results.csv"):
+    def __init__(self, logs, save_path, name="results.csv", test=False):
         super().__init__()
         self.save_path = save_path
         self.logs = logs
         self.file_name = name
         self.build_dict()
+        self.test = test
 
     def on_epoch_start(self, epoch=None, max_epoch=None):
         for key in self.dict:
@@ -62,11 +75,19 @@ class SaveCSV(BaseCallback):
         setattr(self, "dict", {key: [] for key in self.logs.dict})
 
     def update_dict(self):
-        for key in self.dict:
-            self.dict[key].append(self.logs.dict[key][-1])
+        if not self.test:
+            for key in self.dict:
+                self.dict[key].append(self.logs.dict[key][-1])
+        else:
+            for key in self.dict:
+                if 'train' not in key and 'loss' not in key:
+                    self.dict[key].append(self.logs.dict[key][-1])
 
     def write_csv(self):
-        df = pd.DataFrame(self.dict)
+        if self.test:
+            df = pd.DataFrame({key: self.dict[key] for key in self.dict if 'train' not in key and 'loss' not in key})
+        else:
+            df = pd.DataFrame(self.dict)
         csv_path = self.save_path / self.file_name
         if not os.path.isfile(csv_path):
             df.to_csv(csv_path, index=False)
@@ -332,10 +353,10 @@ class ConfusionMatrixLogger(BaseCallback):
 
 
 class Loggers(BaseCallback):
-    def __init__(self, metrics, opt, save_path, device):
+    def __init__(self, metrics, opt, save_path, device, test):
         super().__init__()
-        self.logs = LogsHolder(metrics)
-        self.csv = SaveCSV(self.logs, save_path)
+        self.logs = LogsHolder(metrics, test=test)
+        self.csv = SaveCSV(self.logs, save_path, test=test)
         self.lr = LrLogger(opt, save_path)
         self.figure_saver = SaveFigures(self.logs, save_path)
         self.ROC = ROClogger(save_path, num_classes=metrics.num_classes, device=device)
@@ -407,4 +428,60 @@ class LoggersBoth(BaseCallback):
         setattr(self, "list", [value for _, value in vars(self).items()])
 
 
+def log_confidence_score(indexes, scores, save_path):
+
+    scores_np = scores.numpy()
+
+    # all together
+    save_boxplot([scores_np], save_path / 'confidence.png')
+
+    N = scores_np[np.where(indexes == 0)]
+    V = scores_np[np.where(indexes == 1)]
+    S = scores_np[np.where(indexes == 2)]
+
+    save_scores(scores_np, N, V, S, save_path)
+
+    div_data = [d for d in [N, V, S] if d.size != 0]
+    # divided
+    save_boxplot(div_data, save_path / 'divided_confidence.png')
+
+
+def save_boxplot(values: list, save_path):
+
+    names = [apply_map(l) for l in range(len(values))]
+    data = [d for d in values]
+
+    plt.figure(figsize=(20, 11))
+    plt.boxplot(data, vert=True, patch_artist=True, labels=names)
+    plt.title('Boxplot')
+    plt.savefig(save_path, dpi=96)
+
+
+def apply_map(x):
+    if x == 0:
+        return 'N'
+    if x == 1:
+        return 'V'
+    if x == 2:
+        return 'S'
+
+
+def save_scores(scores_np, N, V, S, save_path):
+    np.save(save_path / 'scores.npy', scores_np)
+    df = pd.read_csv(save_path / 'results.csv')
+    df['mean_conf'] = np.mean(scores_np)
+    df['mean_0_conf'] = np.mean(N)
+    df['mean_1_conf'] = np.mean(V)
+    np.save(save_path / 'scores_0.npy', N)
+    np.save(save_path / 'scores_1.npy', V)
+    if S.size != 0:
+        np.save(save_path / 'scores_2.npy', S)
+        df['mean_2_conf'] = np.mean(S)
+
+    df.to_csv(save_path / 'results.csv', index=False)
+
+
+def save_predictions(pred, save_path):
+    pred = pred.numpy()
+    np.save(save_path / 'predictions.npy', pred)
 

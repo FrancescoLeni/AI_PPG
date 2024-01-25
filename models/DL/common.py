@@ -4,7 +4,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 
 from models.DL.models_blocks import CNeXtBlock, CNeXtStem, CNeXtDownSample, ResBlock, ConvNormAct, ResBlockDP, TransformerBlock, SPPF, C3
-from models.DL.utility_blocks import SelfAttentionModule, PatchMerging, PatchExpanding, LayerNorm, SelfAttentionModuleFC
+from models.DL.utility_blocks import SelfAttentionModule, PatchMerging, PatchExpanding, LayerNorm, SelfAttentionModuleFC, SelfAttentionModuleLin
 
 
 class Dummy(nn.Module):
@@ -86,7 +86,7 @@ class ConvNeXtSAM(nn.Module):
     # ConvNeXt-B: C = (128; 256; 512; 1024), B = (3; 3; 27; 3)
     # ConvNeXt-L: C = (192; 384; 768; 1536), B = (3; 3; 27; 3)
     # ConvNeXt-XL: C = (256; 512; 1024; 2048), B = (3; 3; 27; 3)
-    def __init__(self, num_classes, model_type='T', drop_path=0., layer_scale_init_value=1e-6):
+    def __init__(self, num_classes, in_c, model_type='T', drop_path=0., layer_scale_init_value=1e-6):
         super().__init__()
 
         if model_type == 'T':
@@ -104,7 +104,7 @@ class ConvNeXtSAM(nn.Module):
         elif model_type == 'XL':
             self.C = [256, 512, 1024, 2048]
 
-        self.stem = CNeXtStem(1, self.C[0], k=2, s=2)
+        self.stem = CNeXtStem(in_c, self.C[0], k=2, s=2)
 
         self.SAM = nn.ModuleList([SelfAttentionModule(self.C[i]) for i in range(4)])
 
@@ -918,7 +918,94 @@ class LearnableInitBiLSTM2(nn.Module):
         return out
 
 
+class MLP(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        self.fc0 = nn.Linear(11, 32)
+        self.act = nn.ReLU()
+        self.fc1 = nn.Linear(32, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.out = nn.Linear(32, num_classes)
+
+    def forward(self, x):
+        x = self.act(self.fc0(x))
+        x = self.act(self.fc1(x))
+        x = self.act(self.fc2(x))
+        x = self.out(x)
+        return x
 
 
+class MLPdo(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        self.do = nn.Dropout(0.1)
+        self.fc0 = nn.Linear(11, 32)
+        self.act = nn.ReLU()
+        self.fc1 = nn.Linear(32, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.out = nn.Linear(32, num_classes)
+
+    def forward(self, x):
+        x = self.act(self.fc0(x))
+        x = self.do(x)
+        x = self.act(self.fc1(x))
+        x = self.do(x)
+        x = self.act(self.fc2(x))
+        x = self.do(x)
+        x = self.out(x)
+        return x
+
+
+class MLPatt(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        self.mlp = nn.Sequential(nn.Linear(11, 32),
+                                 nn.LayerNorm(32, eps=1e-6),
+                                 nn.ReLU(),
+                                 SelfAttentionModuleLin(32),
+                                 nn.Linear(32, 64),
+                                 torch.nn.LayerNorm(64, eps=1e-6),
+                                 nn.ReLU(),
+                                 SelfAttentionModuleLin(64),
+                                 nn.Linear(64, 32),
+                                 torch.nn.LayerNorm(32, eps=1e-6),
+                                 nn.ReLU(),
+                                 SelfAttentionModuleLin(32),
+                                 nn.Linear(32, num_classes)
+                                 )
+
+    def forward(self, x):
+        x = self.mlp(x)
+        return x
+
+
+class MLPattDo(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        self.mlp = nn.Sequential(nn.Linear(11, 32),
+                                 nn.LayerNorm(32, eps=1e-6),
+                                 nn.ReLU(),
+                                 nn.Dropout(0.1),
+                                 SelfAttentionModuleLin(32),
+                                 nn.Linear(32, 64),
+                                 torch.nn.LayerNorm(64, eps=1e-6),
+                                 nn.ReLU(),
+                                 nn.Dropout(0.1),
+                                 SelfAttentionModuleLin(64),
+                                 nn.Linear(64, 32),
+                                 torch.nn.LayerNorm(32, eps=1e-6),
+                                 nn.ReLU(),
+                                 nn.Dropout(0.1),
+                                 SelfAttentionModuleLin(32),
+                                 nn.Linear(32, num_classes)
+                                 )
+
+    def forward(self, x):
+        x = self.mlp(x)
+        return x
 
 

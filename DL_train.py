@@ -1,18 +1,21 @@
 import argparse
+import os
+
 import torch
 import torch.nn as nn
+from pathlib import Path
 
 from models.DL import ModelClass, check_load_model
 from models.DL.common import Dummy, ConvNeXt, ConvNeXtSAM, ResNet1, ResNet2, ResNetTransform, ResNetTransform2, \
                              ResNetTransformerAtt, TransformerEncDec, ResUnet, ResUnetAtt, DarkNetCSP, ResUnetAtt2, \
-                             DarkNetCSPBoth, LearnableInitBiLSTM, LearnableInitBiLSTM2
-from utils.dataloaders import Crops, CroppedSeq, Sequences
+                             DarkNetCSPBoth, LearnableInitBiLSTM, LearnableInitBiLSTM2, MLPdo, MLPatt, MLPattDo, MLP
+from utils.dataloaders import Crops, CroppedSeq, Sequences, MLdf
 from utils.DL.callbacks import Callbacks, EarlyStopping, Saver
-from utils.DL.loaders import CropsDataset, CroppedSeqDataset, WindowedSeq
+from utils.DL.loaders import CropsDataset, CroppedSeqDataset, WindowedSeq, MLLoader
 from utils.DL.optimizers import get_optimizer, scheduler
-from utils.DL.collates import padding_x, keep_unchanged
+from utils.DL.collates import padding_x, keep_unchanged, squeeze_labs
 from utils.DL.metrics import Metrics
-from utils.DL.logger import Loggers, LoggersBoth
+from utils.DL.logger import Loggers, LoggersBoth, log_confidence_score, save_predictions
 from utils import random_state, increment_path, json_from_parser
 
 # setting all random states
@@ -24,7 +27,13 @@ def main(args):
     # unpacking
     folder = args.folder
     name = args.name
-    save_path = increment_path(folder, name)
+    if not args.test:
+        p = Path(folder) / 'train'
+    else:
+        p = Path(folder) / 'test'
+    if not os.path.isdir(p):
+        os.mkdir(p)
+    save_path = increment_path(p, name)
     epochs = args.epochs
     batch_size = args.batch_size
     device = args.device
@@ -53,7 +62,7 @@ def main(args):
     elif args.crops_raw:
         crops_data = Crops(parent='dataset/crops_raw')
         crops_data.split(test_size=0.15)
-        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm,
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=args.stratify, raw=True, normalization=args.data_norm,
                                 sig_mode='single', bi_head=bi_head_f)
         val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
                                sig_mode='single', bi_head=bi_head_f)
@@ -93,7 +102,7 @@ def main(args):
     elif args.crops_all:
         crops_data = Crops()  # filtered
         crops_data.split(test_size=0.15, everything=True)
-        test_set = CropsDataset(crops_data.test, mode=mode, stratify=False, raw=True, normalization=args.data_norm,
+        test_set = CropsDataset(crops_data.test, mode=mode, stratify=args.stratify, raw=True, normalization=args.data_norm,
                                 sig_mode='all', bi_head=bi_head_f)
         val_set = CropsDataset(crops_data.val, mode=mode, stratify=True, raw=True, normalization=args.data_norm,
                                sig_mode='all', bi_head=bi_head_f)
@@ -124,8 +133,15 @@ def main(args):
         val_set = WindowedSeq(data.val, mode=mode, raw=True, normalization=args.data_norm)
         train_set = WindowedSeq(data.train, mode=mode, raw=True, normalization=args.data_norm)
         n_in = 1
+    elif args.ML:
+        data = MLdf(mode)
+        test_set = MLLoader(data.test, mode=mode)
+        val_set = MLLoader(data.val, mode=mode)
+        train_set = MLLoader(data.train, mode=mode)
     else:
-        raise ValueError("data format not recognised")    # checking whether you parsed weights or model name
+        raise ValueError("data format not recognised")
+
+    # model
     if "." not in args.model:
         if args.model == "Dummy":
             model = Dummy(num_classes)
@@ -133,7 +149,7 @@ def main(args):
         elif args.model == "ConvNeXt":
             model = ConvNeXt(num_classes)
         elif args.model == "ConvNeXtSAM":
-            model = ConvNeXtSAM(num_classes)
+            model = ConvNeXtSAM(num_classes, n_in)
         elif args.model == "ResNet1":
             model = ResNet1(num_classes, n_in)
         elif args.model == "ResNet2":
@@ -160,6 +176,14 @@ def main(args):
             model = LearnableInitBiLSTM(num_classes, n_in)
         elif args.model == 'LearnableInitBiLSTM2':
             model = LearnableInitBiLSTM2(num_classes, n_in)
+        elif args.model == 'MLP':
+            model = MLP(num_classes)
+        elif args.model == 'MLPdo':
+            model = MLPdo(num_classes)
+        elif args.model == 'MLPatt':
+            model = MLPatt(num_classes)
+        elif args.model == 'MLPattDo':
+            model = MLPattDo(num_classes)
         else:
             raise TypeError("Model name not recognised")
     else:
@@ -217,7 +241,7 @@ def main(args):
 
     # initializing loggers
     if not bi_head_f:
-        logger = Loggers(metrics=metrics, save_path=save_path, opt=opt, device=device)
+        logger = Loggers(metrics=metrics, save_path=save_path, opt=opt, device=device, test=args.test)
     else:
         #  metrics1 -> binary; metrics2 -> all
         logger = LoggersBoth(metrics1=metrics[0], metrics2=metrics[1], save_path=save_path, opt=opt, device=device)
@@ -238,26 +262,43 @@ def main(args):
         test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True)
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
-
-
+    elif args.ML:
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=squeeze_labs)
+        val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=squeeze_labs)
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=squeeze_labs)
     # building model
     model = ModelClass(mod, (train_loader, val_loader, test_loader), loss_fn=loss_fn, device=device, AMP=args.AMP,
                        optimizer=opt, metrics=metrics, loggers=logger, callbacks=callbacks, sched=sched,
                        freeze=freeze_list, sequences=seq_flag, bi_head=bi_head_f)
 
-    # training loop
-    model.train_loop(epochs)
+    if not args.test:
+        # training loop
+        model.train_loop(epochs)
+    else:
+        # test setting
+        o = model.inference(True)
+
+        for i, t in enumerate(o):
+            if i == 0:
+                out = t
+            else:
+                out = torch.concat((out, t), dim=0)
+
+        max_indices = torch.argmax(out, dim=1)
+        max_values = torch.max(out, dim=1).values
+
+        save_predictions(max_indices, save_path)
+        log_confidence_score(max_indices, max_values, save_path)
+        if os.path.isdir(save_path / 'weights'):
+            os.rmdir(save_path / 'weights')
 
 
 if __name__ == "__main__":
 
+    # list of arguments
     parser = argparse.ArgumentParser(description="Parser")
-    parser.add_argument('--model', type=str, required=True, choices=["CNN", "ConvNeXt", "ConvNeXtSAM", "ResNet1", "ResNet2",
-                                                                     "ResNetTransform", "ResNetTransform2", "ResNetTransformerAtt",
-                                                                     "TransformerEncDec", "ResUnet", "ResUnetAtt", "DarkNetCSP",
-                                                                     "ResUnetAtt2", "DarkNetCSPBoth", "LearnableInitBiLSTM",
-                                                                     "Dummy", "LearnableInitBiLSTM2"],
-                                                                      help='name of model to train or path to weights to train')
+    parser.add_argument('--test', action="store_true", help="whether to run inference mode")
+    parser.add_argument('--model', type=str, required=True, help='name of model to train or path to weights to train')
     parser.add_argument('--backbone', type=str, default=None, help='path to backbone weights for transformer architechtures')
     parser.add_argument('--freeze', action="store_true", help='whether to freeze backbone')
     parser.add_argument('--epochs', type=int, required=True, help='number of epochs')
@@ -277,6 +318,7 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=str, default="cpu", choices=["cpu", "gpu"], help='device to which loading the model')
     parser.add_argument('--AMP', action="store_true", help='whether to use AMP')
     parser.add_argument('--weighted_loss', action="store_true", help='whether to weighten the loss and wheight for classes')
+    parser.add_argument('--stratify', action='store_true')
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--crops', action="store_true", help='whether to use Crops dataset')
@@ -289,6 +331,7 @@ if __name__ == "__main__":
     group.add_argument('--windowed_seq', action="store_true", help="wheter to use raw windowed sequences")
     group.add_argument('--fixed_crops', action="store_true", help='whether to use fixed Crops dataset')
     group.add_argument('--fixed_crops_raw', action="store_true", help='whether to use fixed Crops_raw dataset (extracted from raw signal)')
+    group.add_argument('--ML', action='store_true', help='whether to use ML dataframe')
 
     args = parser.parse_args()
 

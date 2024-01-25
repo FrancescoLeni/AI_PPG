@@ -24,3 +24,12 @@ def keep_unchanged(batch):
     x, y = zip(*batch)
 
     return x[0], y[0]
+
+
+def squeeze_labs(batch):
+    x, y = zip(*batch)
+
+    x = torch.stack(x, dim=0)
+    y = torch.stack(y, dim=0).squeeze()
+
+    return x, y

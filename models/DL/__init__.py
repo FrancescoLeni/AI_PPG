@@ -292,6 +292,8 @@ class ModelClass(nn.Module):
                 print(f"early stopping at epoch {epoch}")
                 break
 
+        # self.loggers.on_epoch_end(0)
+
         # logging metrics images
         self.loggers.on_end()
         # calling callbacks (saving last model)
@@ -304,7 +306,9 @@ class ModelClass(nn.Module):
         model = nn.Sequential(self.model,
                               nn.Softmax(1))
 
-        #resetting metrics for validation
+        self.loggers.on_epoch_start(0, 1)
+
+        # resetting metrics for validation
         self.metrics.on_val_start()
 
         # initilialize progress bar
@@ -323,7 +327,7 @@ class ModelClass(nn.Module):
                     labels = labels.to(self.device)
 
                 output = model(inputs)
-                pred = np.uint8(np.argmax(output.to('cpu')))
+                pred = output.to('cpu')
                 outputs.append(pred)
 
                 if self.device != "cpu":
@@ -331,6 +335,7 @@ class ModelClass(nn.Module):
 
                 # computing metrics on batch
                 self.metrics.on_val_batch_end(output, labels, batch)
+                self.loggers.on_val_batch_end(output, labels, batch)
 
                 # updating pbar
                 if self.metrics.num_classes != 2:
@@ -343,14 +348,18 @@ class ModelClass(nn.Module):
                     P = self.metrics.P.v_value[1]
                     R = self.metrics.R.v_value[1]
                     AUC = self.metrics.AuC.v_value[1]
-                description = f'item: {batch}/{len(self.test_loader)}, A: {A :.2f}, ' \
+                description = f'item: {batch}/{len(self.test_loader)-1}, A: {A :.2f}, ' \
                               f'P: {P :.2f}, R: {R :.2f}, AUC: {AUC :.2f}'
                 pbar_loader.set_description(description)
 
         # print TEST RESULTS
         # resetting metrics
+        self.metrics.on_val_end(0)
         self.loggers.on_val_end()
+        self.loggers.on_epoch_end()
         self.metrics.on_epoch_end()
+
+        self.loggers.on_end()
 
         if return_preds:
             return outputs
@@ -397,7 +406,7 @@ def check_load_model(model, backbone_weights):
         if isinstance(model, nn.Module):
             return model
         elif isinstance(model, str) and Path(model).suffix == ".pt" or ".pth":
-            return torch.load(model)
+            return torch.load(model, map_location=torch.device('cpu'))
         else:
             raise TypeError("model not recognised")
     else:

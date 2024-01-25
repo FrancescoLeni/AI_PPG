@@ -1,0 +1,5 @@
+N: 226448, V: 7994, S: 9691, tot: 244133
+
+
+numbers of remained crops after thresholding
+tot: 244133, iqr: 152337, iqr15: 167093, iqr3: 195186

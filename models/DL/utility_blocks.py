@@ -175,3 +175,18 @@ class PatchExpanding(nn.Module):
 
             return x
 
+
+class SelfAttentionModuleLin(nn.Module):
+    def __init__(self, c_in):
+        super().__init__()
+        self.spatial = nn.Sequential(nn.Linear(c_in, c_in//2),
+                                     nn.ReLU(),
+                                     nn.Linear(c_in//2, c_in)
+                                    )
+        self.act = nn.Sigmoid()
+
+    def forward(self, x):
+        x_ = self.spatial(x)
+        scale = self.act(x_)
+
+        return x * scale

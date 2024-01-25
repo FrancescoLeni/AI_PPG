@@ -86,7 +86,7 @@ class CropsDataset(torch.utils.data.Dataset):
     def build_N_V_S(self, data, normalization):
         if self.signal_mode == 'single':
             for x, y in data:
-                if np.max(x) < 4.55 and np.min(x) > -4.55:  # Q3+3IQR, Q1-3IQR
+                if np.max(x) < 3.47 and np.min(x) > -3.47:  # Q3+3IQR, Q1-3IQR
                     x = self.normalize(x, mode=normalization, data='signal', raw=self.raw)
                     if y == "V":
                         self.V.append(x)
@@ -96,7 +96,7 @@ class CropsDataset(torch.utils.data.Dataset):
                         self.N.append(x)
         elif self.signal_mode == 'derivatives':
             for (x, _, j, a, v), y in data:
-                if np.max(x) < 4.55 and np.min(x) > -4.55:  # Q3+3IQR, Q1-3IQR
+                # if np.max(x) < 4.55 and np.min(x) > -4.55:  # Q3+3IQR, Q1-3IQR
                     if normalization:
                         x = self.normalize(x, mode=normalization, data='signal')
                         j = self.normalize(j, mode=normalization, data='jpg')
@@ -114,7 +114,7 @@ class CropsDataset(torch.utils.data.Dataset):
         elif self.signal_mode == 'all':
             # assumes to be given the filtered (default) parent to Crops instance
             for (x, r, j, a, v), y in data:
-                if np.max(x) < 4.55 and np.min(x) > -4.55:  # Q3+3IQR, Q1-3IQR
+                if np.max(x) < 3.47 and np.min(x) > -3.47:  # Q3+3IQR, Q1-3IQR
                     if normalization:
                         x = self.normalize(x, mode=normalization, data='signal', raw=False)
                         r = self.normalize(r, mode=normalization, data='signal', raw=True)
@@ -175,8 +175,8 @@ class CropsDataset(torch.utils.data.Dataset):
                 if raw:
                     # d_min = self.stats['min_raw']
                     # d_max = self.stats['max_raw']
-                    d_min = -4.55  # Q3+3IQR, Q1-3IQR
-                    d_max = 4.55
+                    d_min = -3.47  # Q3+3IQR, Q1-3IQR
+                    d_max = 3.47
                 else:
                     d_min = self.stats['min_filtered']
                     d_max = self.stats['max_filtered']
@@ -600,5 +600,38 @@ class WindowedSeq:
         return (x - mean) / std
 
 
+class MLLoader(torch.utils.data.Dataset):
+    def __init__(self, data, mode):
+        super().__init__()
+
+        self.mode = mode
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        x, y = self.data[idx]
+
+        data = torch.tensor(x, dtype=torch.float32)
+        target = torch.LongTensor([self.mapping(y)])
+
+        return data, target
+
+    def mapping(self, y):
+        if y == 'N':
+            y = 0
+        else:
+            if self.mode == 'binary':
+                y = 1
+            else:
+                if y == 'V':
+                    y = 1
+                else:  # 'S'
+                    y = 2
+        return y
+
+    def build(self):
+        pass
 
 

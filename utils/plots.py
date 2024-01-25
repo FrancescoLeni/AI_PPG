@@ -41,7 +41,7 @@ def raw_vs_filtered(raw, filtered, onsets, peaks, labels, dt = 0, th_raw=3.47, t
         axes[1].text(x, y+0.01*abs(y), label, fontsize=8, color='black')
     axes[1].set_title('Filtered')
 
-    axes[0].plot([dt, dt+5000], [th_raw, th_raw], color='darkblue', linestyle='--')
+    axes[0].plot([dt, dt+5000], [th_raw, th_raw], color='darkblue', linestyle='--',  label='IQR')
     axes[0].plot([dt, dt+5000], [-th_raw, -th_raw], color='darkblue', linestyle='--')
     axes[0].plot([dt, dt+5000], [4.63, 4.63], color='red', linestyle='--')
     axes[0].plot([dt, dt+5000], [-4.63, -4.63], color='red', linestyle='--')

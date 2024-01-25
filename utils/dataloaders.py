@@ -231,10 +231,10 @@ class Crops:
         self.j = {'N': [], 'V': [], 'S': []}
         self.v = {'N': [], 'V': [], 'S': []}
         self.a = {'N': [], 'V': [], 'S': []}
-        self.load_derivatives()  # populating above dict
+        #self.load_derivatives()  # populating above dict
 
         self.raw = {'N': [], 'V': [], 'S': []}
-        self.load_raw()  # populating above
+        #self.load_raw()  # populating above
 
         # compressing everything to handle splitting
         self.N = [(x, r, j, a, v) for x, r, j, a, v in zip(self.N_crops, self.raw['N'], self.j['N'], self.a['N'], self.v['N'])]
@@ -437,3 +437,44 @@ class Sequences:
         # self.train = [self.data[key] for key in m9]
         # self.val = [self.data[key] for key in less_9_val]
         # self.test = [self.data[key] for key in test]
+
+
+class MLdf:
+    def __init__(self, mode):
+        self.train = []
+        self.val = []
+        self.test = []
+
+        if mode == 'binary':
+            self.get_binary()
+        elif mode == 'all':
+            self.get_multi()
+
+    def get_binary(self):
+        df_x_train_b = pd.read_csv('dataset/ML_split/binary/train_features.csv')
+        df_y_train_b = pd.read_csv('dataset/ML_split/binary/train_labels.csv')
+
+        df_x_val_b = pd.read_csv('dataset/ML_split/binary/validation_features.csv')
+        df_y_val_b = pd.read_csv('dataset/ML_split/binary/validation_labels.csv')
+
+        df_x_test_b = pd.read_csv('dataset/ML_split/binary/test_features.csv')
+        df_y_test_b = pd.read_csv('dataset/ML_split/binary/test_labels.csv')
+
+        self.train = [(x.tolist(), y.tolist()[0]) for (_, x), (_, y) in zip(df_x_train_b.iterrows(), df_y_train_b.iterrows())]
+        self.val = [(x.tolist(), y.tolist()[0]) for (_, x), (_, y) in zip(df_x_val_b.iterrows(), df_y_val_b.iterrows())]
+        self.test = [(x.tolist(), y.tolist()[0]) for (_, x), (_, y) in zip(df_x_test_b.iterrows(), df_y_test_b.iterrows())]
+
+    def get_multi(self):
+        df_x_train_b = pd.read_csv('dataset/ML_split/multiclass/train_features.csv')
+        df_y_train_b = pd.read_csv('dataset/ML_split/multiclass/train_labels.csv')
+
+        df_x_val_b = pd.read_csv('dataset/ML_split/multiclass/validation_features.csv')
+        df_y_val_b = pd.read_csv('dataset/ML_split/multiclass/validation_labels.csv')
+
+        df_x_test_b = pd.read_csv('dataset/ML_split/multiclass/test_features.csv')
+        df_y_test_b = pd.read_csv('dataset/ML_split/multiclass/test_labels.csv')
+
+        self.train = [(x.tolist(), y.tolist()[0]) for (_, x), (_, y) in zip(df_x_train_b.iterrows(), df_y_train_b.iterrows())]
+        self.val = [(x.tolist(), y.tolist()[0]) for (_, x), (_, y) in zip(df_x_val_b.iterrows(), df_y_val_b.iterrows())]
+        self.test = [(x.tolist(), y.tolist()[0]) for (_, x), (_, y) in zip(df_x_test_b.iterrows(), df_y_test_b.iterrows())]
+
