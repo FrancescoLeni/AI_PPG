@@ -345,7 +345,7 @@ class ML_experiment:
             class_names = model.classes_
 
         if self.reporting:
-            print(classification_report(test_labels, test_predicted, target_names=class_names))
+            print(classification_report(test_labels, test_predicted, target_names=class_names, digits=3))
 
         return model, test_predicted
     
