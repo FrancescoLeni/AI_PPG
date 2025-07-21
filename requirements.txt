@@ -21,4 +21,3 @@ seaborn==0.13.0
 xgboost==2.0.3
 
 # pyppg==1.0.44
-# pip install now would install 1.0.14 --> latest version supported by pip until now?

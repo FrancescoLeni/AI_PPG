@@ -2,7 +2,9 @@
 *__pycache__*
 
 # Folders to ignore
+.idea/
 /runs/
 /dataset/
 /venvPPG/
 /temp_dir/
+/data/
