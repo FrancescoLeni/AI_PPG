@@ -77,7 +77,7 @@ This setup allows for a comprehensive comparison of different modeling approache
 
 | Model             | Recall (%) | Precision (%) | F1-score (%) | Accuracy (%) |
 |-------------------|------------|---------------|--------------|--------------|
-| **biLSTM**        | **95.1**   | **72.1**      | **82.0**     | **94.5**     |
+| **CNN+LSTM**        | **95.1**   | **72.1**      | **82.0**     | **94.5**     |
 | LSTM              | 93.9       | 69.3          | 79.6         | 93.5         |
 | ConvNeXt          | 92.8       | 67.3          | 78.0         | 92.3         |
 | ResNet            | 89.2       | 63.6          | 74.3         | 90.1         |
